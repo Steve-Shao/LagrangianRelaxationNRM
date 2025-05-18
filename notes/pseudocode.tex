@@ -1,0 +1,319 @@
+\documentclass[11pt]{article}
+
+% Packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{geometry}
+
+% Algorithm packages
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{algorithmicx}
+
+% Additional customization for algorithms
+\algnewcommand\algorithmicinput{\textbf{Input:}}
+\algnewcommand\algorithmicoutput{\textbf{Output:}}
+\algnewcommand\Input{\item[\algorithmicinput]}
+\algnewcommand\Output{\item[\algorithmicoutput]}
+
+
+% Page setup
+\geometry{margin=1in}
+
+% Theorem environments
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Custom commands
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\C}{\mathbb{C}}
+
+\title{A Concise Overview of the Lagrangian Relaxation Algorithm for Network Revenue Management}
+\author{Hongzhang ``Steve'' Shao}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+% SECTION
+% ------------------------------------------------------------------------------------------------
+
+\section{Problem Formulation}
+
+Consider a \textbf{network revenue management problem} with:
+\begin{itemize}[itemsep=0pt,parsep=0pt]
+\item[-] A set of resources (flight legs) $\mathcal{L}$, each with capacity $c_i$ for $i\in \mathcal{L}$. 
+\item[-] A set of products (itineraries) $\mathcal{J}$, each with revenue $f_j$ for $j\in \mathcal{J}$. 
+    \begin{itemize}[itemsep=0pt,parsep=0pt]
+    \item Each purchase of product $j$ consumes $a_{ij}$ units of capacity from resource $i$ for each $i$. 
+    \end{itemize}
+\item[-] Discrete time horizon $\mathcal{T}=\{1,\ldots,\tau\}$. 
+\end{itemize}
+
+\noindent
+In each period $t$:
+\begin{itemize}[itemsep=0pt,parsep=0pt]
+\item[-] \textbf{At most one customer arrives}
+\item[-] The customer requests product $j$ with probability $p_{jt}$
+\item[-] $\sum_{j\in \mathcal{J}} p_{jt} \le 1$
+\end{itemize}
+
+\noindent
+Note that, by adding a dummy itinerary $\psi$ with 
+\begin{align*}
+    f_{\psi} &= 0 \\
+    a_{i\psi} &= 0 & \forall i \in \mathcal{L} \\
+    p_{\psi t} &= 1 - \sum_{j\in \mathcal{J}} p_{jt} & \forall t \in \mathcal{T}
+\end{align*}
+we can assume that in each period $t$:
+\begin{itemize}[itemsep=0pt,parsep=0pt]
+\item[-] One customer arrives
+\item[-] The customer requests product $j$ with probability $p_{jt}$
+\item[-] $\sum_{j\in \mathcal{J}} p_{jt} = 1$
+\end{itemize}
+
+\noindent
+Let $x_{it}$ be the remaining capacity of resource $i$ at the start of period $t$. 
+Let $x_t = \bigl(x_{1t}, x_{2t}, \dots, x_{|\mathcal L|,\,t}\bigr)$ be the state vector. 
+Let
+\begin{align*}
+    C &= \max_{\,i\in\mathcal L}\;c_i \\
+    \mathcal{C} &= \{0, 1, \ldots, C\} 
+\end{align*}
+and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
+
+% ------------------------------------------------------------------------------------------------
+% SECTION
+% ------------------------------------------------------------------------------------------------
+
+\newpage
+
+\section{Preliminaries}
+
+\noindent
+\textbf{Dynamic Programming Formulation}:
+\begin{itemize}[itemsep=0pt,parsep=0pt]
+\item[-] Let $u_{jt}\in\{0,1\}$ indicate whether to accept (1) or reject (0) a request for product $j$.
+\item[-] Let $V_t(x_t)$ be the maximum expected revenue from period $t$ to $\tau$ given capacities $x_t$:
+    \begin{align*}
+        V_t(x_t) = \max_{u_t \in \mathcal{U}(x_t)} 
+            \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
+            \left\{ 
+                f_j u_{jt} + 
+                V_{t+1} \left(x_t - u_{jt}\sum_{i\in \mathcal{L}}a_{ij}e_i\right) 
+            \right\} \right\} 
+        \tag{DP1}
+    \end{align*}
+    where
+    \begin{align*}
+        \mathcal{U}(x_t) = \left\{ 
+            u_{t} \in \{0,1\}^{|\mathcal{J}|} : 
+            a_{ij} u_{jt} \le x_{it} \ \ 
+            \forall i \in \mathcal{L}, \ j \in \mathcal{J}
+        \right\} 
+    \end{align*}
+    and $e_i$ is the unit vector with a 1 in the $i$-th position and 0 elsewhere.
+\end{itemize}
+
+\vspace{0.5cm}
+
+\noindent
+An \textbf{Equivalent Dynamic Program}:
+\begin{itemize}[itemsep=0pt,parsep=0pt]
+\item[-] Let $y_{ijt}\in\{0,1\}$ indicate whether to accept (1) or reject (0) \textbf{resource} $i$ when a \textbf{request for product} $j$ arrives (e.g., we allow partially accepting some flight legs when an itinerary uses multiple legs).
+\item[-] Let $\phi$ be a \textbf{fictitious resource} with infinite capacity. 
+\item[-] Let $y_t = \{y_{ijt} : i \in \mathcal{L} \cup \{\phi\}, \ j \in \mathcal{J}\}$.
+\item[-] Then, $V_t(x_t)$ can be computed as:
+    \begin{align*}
+        V_t(x_t) &= \max_{y_t \in \mathcal{Y}(x_t)}
+            \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
+            \left\{ 
+                f_j y_{\phi jt} + 
+                V_{t+1} \left(x_t - \sum_{i\in \mathcal{L}}y_{ijt}a_{ij}e_i\right) 
+            \right\} \right\}
+        \tag{DP2} \\
+        & \text{subject to} \quad y_{ijt} = y_{\phi jt} \quad \forall i \in \mathcal{L}, \ j \in \mathcal{J}
+    \end{align*}
+    where
+    \begin{align*}
+        \mathcal{Y}_{it}(x_t) &= \left\{ 
+            y_{it} \in \{0,1\}^{|\mathcal{J}|} : 
+            a_{ij} y_{ijt} \leq x_{it} \ \ 
+            \forall j \in \mathcal{J} 
+        \right\} \quad i \in \mathcal{L} \\
+        \mathcal{Y}_{\phi t}(x_t) &= \left\{ 
+            y_{\phi t} \in \{0,1\}^{|\mathcal{J}|} 
+        \right\} \\
+        \mathcal{Y}(x_t) &= \mathcal{Y}_{\phi t}(x_t) \prod_{i \in \mathcal{L}} \mathcal{Y}_{it}(x_t) \quad \text{(Cartesian product)}
+    \end{align*}
+\end{itemize}
+
+\vspace{0.5cm}
+
+\noindent
+The \textbf{Lagrangian Relaxation}:
+\begin{itemize}[itemsep=0pt,parsep=0pt]
+\item[-] Let $\lambda = \{\lambda_{ijt} : i \in \mathcal{L}, \ j \in \mathcal{J}, \ t \in \mathcal{T}\}$ denote the Lagrangian multiplier. 
+\item[-] The Lagrangian relaxation $V^{\lambda}_t(x_t)$ is defined as:
+    \begin{align*}
+        V^{\lambda}_t(x_t) &= \max_{y_t \in \mathcal{Y}(x_t)} 
+            \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
+            \left[ 
+                f_j y_{\phi jt} +
+                \sum_{i \in \mathcal{L}} \lambda_{ijt} (y_{ijt} - y_{\phi jt}) + 
+                V_{t+1} \left(x_t - \sum_{i\in \mathcal{L}}y_{ijt}a_{ij}e_i\right) 
+            \right] \right\}
+            \tag{LR} \\
+    \end{align*}
+\end{itemize}
+
+\vspace{0.5cm}
+
+
+% ------------------------------------------------------------------------------------------------
+% SECTION
+% ------------------------------------------------------------------------------------------------
+
+\newpage
+
+\section{Pseudocode}
+
+The Lagrangian relaxation algorithm aims to find an optimal multiplier $\lambda^{*}$ that solves
+\begin{align*}
+    \min_{\lambda} V^{\lambda}_{1}(c_{1}) 
+\end{align*}
+As shown in \cite{topaloglu2009using},
+\begin{align*}
+    V_t(x_t) \leq V^{\lambda}_t(x_t) \quad \forall x_t \in \mathcal{C}^{|\mathcal{L}|}, \ t \in \mathcal{T}
+\end{align*}
+Therefore, $V^{\lambda^{*}}_{1}(c_{1})$ provides a tight bound to $V_{1}(c_{1})$.
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Subgradient Optimization}: 
+Computing $V^{\lambda}_{1}(c_{1})$ is costly, and we cannot find its gradient analytically.
+However, the Lagrangian relaxation $V^{\lambda}_{1}(c_{1})$ is convex in $\lambda$, as shown in \cite{topaloglu2009using}. 
+Thus, we can use subgradient methods to find the optimal multiplier $\lambda^*$.
+We use a Classical Projected Subgradient Descent algorithm as a simple, robust solution.
+
+\begin{algorithm}
+\caption{Subgradient Optimization for Lagrangian Relaxation}
+\begin{algorithmic}[1]
+\Require Initial multiplier $\lambda^0$, initial step size $\alpha_0$, tolerance $\epsilon$, max iterations $K$
+\Ensure Optimal multiplier $\lambda^*$
+\State $k \gets 0$
+\State $V_{\text{prev}} \gets \infty$
+\While{$k < K$}
+    \State Compute $V^{\lambda^k}_{1}(c_{1})$ \Comment{Evaluate current objective}
+    \If{$|V^{\lambda^k}_{1}(c_{1}) - V_{\text{prev}}| < \epsilon$}
+        \State \textbf{break} \Comment{Convergence achieved}
+    \EndIf
+    \State $V_{\text{prev}} \gets V^{\lambda^k}_{1}(c_{1})$
+    \State Generate random unit vector $d$
+    \State Compute $V^{\lambda^k + \delta d}_{1}(c_{1})$ \Comment{Perturbed objective}
+    \State $g^k \gets \frac{V^{\lambda^k + \delta d}_{1}(c_{1}) - V^{\lambda^k}_{1}(c_{1})}{\delta} \cdot d$ \Comment{Approximate subgradient}
+    \State $\alpha_k \gets \frac{\alpha_0}{\sqrt{k+1}}$ \Comment{Update step size}
+    \State $\lambda^{k+1} \gets \max\{0, \lambda^k - \alpha_k g^k\}$ \Comment{Component-wise projection onto $\Lambda = \{\lambda \geq 0\}$}
+    \State $k \gets k + 1$
+\EndWhile
+\State \Return $\lambda^k$
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Solving $V^{\lambda}_{1}(c_{1})$ for a given $\lambda$}: 
+It has been shown in \cite{topaloglu2009using} that $V^{\lambda}_{1}(c_{1})$ can be solved by concentrating on one resource at a time. 
+Specifically, if \(\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}\) is a solution to the optimality equation
+\begin{align*}
+\vartheta^\lambda_{it}(x_{it}) = \max_{y_{it}\in\mathcal{Y}_{it}(x_{it})}\left\{\sum_{j\in\mathcal{J}} p_{jt}\left\{\lambda_{ijt} y_{ijt} + \vartheta^\lambda_{i,t+1}(x_{it} - a_{ij} y_{ijt})\right\}\right\}
+\end{align*}
+for all \(i \in \mathcal{L}\), then we have
+\begin{align*}
+V^\lambda_t(x_t) = \sum_{t' = t}^\tau \sum_{j \in \mathcal{J}} p_{jt'}\left[f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt'}\right]^+ + \sum_{i \in \mathcal{L}} \vartheta^\lambda_{it}(x_{it}).
+\end{align*}
+where $[z]^+ = \max\{z, 0\}$.
+
+\vspace{0.5cm}
+
+\noindent
+We solve the single-resource optimality equation using tabular backward induction:
+
+\begin{algorithm}
+\caption{Subroutine: Tabular Backward Induction for Single-Resource Dynamic Program}
+\begin{algorithmic}[1]
+\Require Resource $i$, capacities $\mathcal{C}$, time periods $\mathcal{T}$, probabilities $p_{jt}$, consumption $a_{ij}$, multipliers $\lambda_{ijt}$
+\Ensure Value functions $\vartheta^\lambda_{it}(x_{it})$ and optimal decisions $y^*_{ijt}(x_{it})$
+\State Initialize $\vartheta^\lambda_{i,\tau+1}(x_{i,\tau+1}) \gets 0$ for all $x_{i,\tau+1} \in \mathcal{C}$ \Comment{Terminal condition}
+\For{$t = \tau$ \textbf{down to} $1$} \Comment{Backward recursion}
+    \For{$x_{it} = 0$ \textbf{to} $C$} \Comment{For each capacity level}
+        \State $\vartheta^\lambda_{it}(x_{it}) \gets 0$
+        \State $y^*_{ijt}(x_{it}) \gets 0$ for all $j \in \mathcal{J}$ \Comment{Initialize decision variables}
+        \For{$j \in \mathcal{J}$} \Comment{For each product}
+            \If{$a_{ij} \leq x_{it}$} \Comment{Check if capacity is sufficient}
+                \State $v_0 \gets \vartheta^\lambda_{i,t+1}(x_{it})$ \Comment{Value if reject}
+                \State $v_1 \gets \lambda_{ijt} + \vartheta^\lambda_{i,t+1}(x_{it} - a_{ij})$ \Comment{Value if accept}
+                \If{$v_1 > v_0$}
+                    \State $y^*_{ijt}(x_{it}) \gets 1$ \Comment{Accept product $j$ at time $t$ with capacity $x_{it}$}
+                \EndIf
+            \EndIf
+        \EndFor
+        \State $\displaystyle \vartheta^\lambda_{it}(x_{it}) \gets \sum_{j\in\mathcal{J}} p_{jt}\Bigl[ \lambda_{ijt}\,y^*_{ijt}(x_{it}) + \vartheta^\lambda_{i,t+1}\!\bigl(x_{it}-a_{ij}y^*_{ijt}(x_{it})\bigr) \Bigr]$
+    \EndFor
+\EndFor
+\State \Return $\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$ and $\{y^*_{ijt}(x_{it}): j \in \mathcal{J}, x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.5cm}
+
+
+
+
+% ------------------------------------------------------------------------------------------------
+% SECTION
+% ------------------------------------------------------------------------------------------------
+
+\section{Control Policy}
+
+\noindent
+The optimal control is to accept a request for product $j$ at time $t$ if and only if:
+\begin{align*}
+f_j \geq \sum_{i \in \mathcal{L}} \sum_{r = 1}^{a_{ij}} \left[ \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - r + 1) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - r) \right]
+\end{align*}
+That is, we accept a product if its revenue exceeds the opportunity cost of consumed resources. 
+The term $\vartheta^{\lambda^{*}}_{i,t+1}(x_{it}) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - 1)$ represents the bid price of resource $i$ at time $t$.
+
+\vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+% SECTION
+% ------------------------------------------------------------------------------------------------
+
+\bibliographystyle{apalike}
+\bibliography{references}
+
+\end{document}

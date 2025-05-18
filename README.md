@@ -61,6 +61,7 @@ In each period $t$:
 - $\sum_{j \in \mathcal{J}} p_{jt} \le 1$
 
 Note: By adding a dummy itinerary $\psi$ with
+
 $$
 \begin{align*}
     f_{\psi} &= 0 \\
@@ -68,6 +69,7 @@ $$
     p_{\psi t} &= 1 - \sum_{j \in \mathcal{J}} p_{jt} \quad \forall t \in \mathcal{T}
 \end{align*}
 $$
+
 Thus, we can assume that in each period $t$:
 - One customer arrives
 - The customer requests product $j$ with probability $p_{jt}$
@@ -76,12 +78,14 @@ Thus, we can assume that in each period $t$:
 Let $x_{it}$ be the remaining capacity of resource $i$ at the start of period $t$.
 Let $x_t = (x_{1t}, x_{2t}, \dots, x_{|\mathcal{L}|, t})$ be the state vector.
 Let
+
 $$
 \begin{align*}
     C &= \max_{i \in \mathcal{L}} c_i \\
     \mathcal{C} &= \{0, 1, \ldots, C\}
 \end{align*}
 $$
+
 and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 
 <br>
@@ -98,6 +102,7 @@ The method should address:
 
 - Let $u_{jt} \in \{0,1\}$ indicate whether to accept (1) or reject (0) a request for product $j$.
 - Let $V_t(x_t)$ be the maximum expected revenue from period $t$ to $\tau$ given capacities $x_t$:
+
 $$
 V_t(x_t) = \max_{u_t \in \mathcal{U}(x_t)} 
     \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
@@ -107,7 +112,9 @@ V_t(x_t) = \max_{u_t \in \mathcal{U}(x_t)}
     \right] \right\}
 \tag{DP1}
 $$
+
 where
+
 $$
 \mathcal{U}(x_t) = \left\{ 
     u_{t} \in \{0,1\}^{|\mathcal{J}|} : 
@@ -115,6 +122,7 @@ $$
     \forall i \in \mathcal{L}, \ j \in \mathcal{J}
 \right\}
 $$
+
 and $e_i$ is the unit vector with a 1 in the $i$-th position and 0 elsewhere.
 
 ### Equivalent Dynamic Program
@@ -171,24 +179,32 @@ $$
 ### The Lagrangian Relaxation Algorithm
 
 The Lagrangian relaxation algorithm aims to find an optimal multiplier $\lambda^{*}$ that solves
+
 $$
 \min_{\lambda} V^{\lambda}_{1}(c_{1})
 $$
+
 As shown in [Topaloglu 2009], we have
+
 $$
 V_t(x_t) \leq V^{\lambda}_t(x_t) \quad \forall x_t \in \mathcal{C}^{|\mathcal{L}|}, \ t \in \mathcal{T}
 $$
+
 Therefore, $V^{\lambda^{*}}_{1}(c_{1})$ provides a tight bound to $V_{1}(c_{1})$.
 
 It has been shown in [Topaloglu 2009] that given $\lambda$, the value of $V^{\lambda}_{1}(c_{1})$ can be solved by concentrating on one resource at a time. 
 Specifically, if $\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$ is a solution to the optimality equation
+
 $$
 \vartheta^\lambda_{it}(x_{it}) = \max_{y_{it}\in\mathcal{Y}_{it}(x_{it})} \left\{ \sum_{j\in\mathcal{J}} p_{jt} \left[ \lambda_{ijt} y_{ijt} + \vartheta^\lambda_{i,t+1}(x_{it} - a_{ij} y_{ijt}) \right] \right\}
 $$
+
 for all $i \in \mathcal{L}$, then
+
 $$
 V^\lambda_t(x_t) = \sum_{t' = t}^\tau \sum_{j \in \mathcal{J}} p_{jt'} \left[ f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt'} \right]^+ + \sum_{i \in \mathcal{L}} \vartheta^\lambda_{it}(x_{it})
 $$
+
 where $[z]^+ = \max\{z, 0\}$.
 
 It has also been shown in [Topaloglu 2009] that the Lagrangian relaxation $V^{\lambda}_{1}(c_{1})$ is convex in $\lambda$. 

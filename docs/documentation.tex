@@ -21,6 +21,12 @@
 \algnewcommand\Input{\item[\algorithmicinput]}
 \algnewcommand\Output{\item[\algorithmicoutput]}
 
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
 
 % Page setup
 \geometry{margin=1in}
@@ -41,9 +47,9 @@
 \newcommand{\Q}{\mathbb{Q}}
 \newcommand{\C}{\mathbb{C}}
 
-\title{A Concise Overview of the Lagrangian Relaxation Algorithm for Network Revenue Management}
+\title{Implementation of the Lagrangian Relaxation Algorithm for Network Revenue Management}
 \author{Hongzhang ``Steve'' Shao}
-\date{\today}
+\date{May 18, 2025}
 
 \begin{document}
 
@@ -54,10 +60,56 @@
 
 
 % ------------------------------------------------------------------------------------------------
+% ABSTRACT
+% - Who is the customer? What is their need? Why do they need this solution?
+% - What does this product do? How does it benefit the customer?
+% - How is success measured for this product? When will it be considered successful?
+% ------------------------------------------------------------------------------------------------
+
+% \noindent
+% This repository provides a public implementation of the Lagrangian Relaxation Algorithm for network revenue management, originally developed by Prof. Huseyin Topaloglu (2009). 
+% Researchers in operations research often use this algorithm and its test dataset as benchmarks, but no open implementation has been available until now. 
+% This code allows researchers to test, compare, and build upon the algorithm easily. 
+% I have tested our implementation on all instances in Prof. Topaloglu's dataset, and the results match those reported in his paper. \\
+
+% \noindent
+% I developed this project as part of my research with Prof. Baris Ata on solving NRM problems with deep learning-based numerical methods. 
+% I hope this implementation will help others support reproducible research and further work in network revenue management.
+
+% \vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+% INTRODUCTION
+% ------------------------------------------------------------------------------------------------
+
+% \section{Introduction}
+
+% \vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+% LITERATURE REVIEW
+% ------------------------------------------------------------------------------------------------
+
+\section{Resources}
+
+This project is based on \cite{topaloglu2009using}.
+Both the paper and its dataset are publicly available on Prof. Huseyin Topaloglu's \underline{\href{https://people.orie.cornell.edu/huseyin}{website}}. 
+You can access the paper directly \underline{\href{https://people.orie.cornell.edu/huseyin/publications/revenue_man.pdf}{here}}.
+The dataset can be downloaded from \underline{\href{https://people.orie.cornell.edu/huseyin/research/rm_datasets/rm_datasets.html}{this page}}.
+
+\vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
 % SECTION
 % ------------------------------------------------------------------------------------------------
 
-\section{Problem Formulation}
+\section{The NRM Problem}
 
 Consider a \textbf{network revenue management problem} with:
 \begin{itemize}[itemsep=0pt,parsep=0pt]
@@ -84,7 +136,7 @@ Note that, by adding a dummy itinerary $\psi$ with
     a_{i\psi} &= 0 & \forall i \in \mathcal{L} \\
     p_{\psi t} &= 1 - \sum_{j\in \mathcal{J}} p_{jt} & \forall t \in \mathcal{T}
 \end{align*}
-we can assume that in each period $t$:
+It can be assumed that in each period $t$:
 \begin{itemize}[itemsep=0pt,parsep=0pt]
 \item[-] One customer arrives
 \item[-] The customer requests product $j$ with probability $p_{jt}$
@@ -101,13 +153,15 @@ Let
 \end{align*}
 and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 
+\vspace{0.5cm}
+
+
+
 % ------------------------------------------------------------------------------------------------
 % SECTION
 % ------------------------------------------------------------------------------------------------
 
-\newpage
-
-\section{Preliminaries}
+\section{The LR Algorithm}
 
 \noindent
 \textbf{Dynamic Programming Formulation}:
@@ -137,9 +191,9 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 \vspace{0.5cm}
 
 \noindent
-An \textbf{Equivalent Dynamic Program}:
+\textbf{Equivalent Dynamic Program}:
 \begin{itemize}[itemsep=0pt,parsep=0pt]
-\item[-] Let $y_{ijt}\in\{0,1\}$ indicate whether to accept (1) or reject (0) \textbf{resource} $i$ when a \textbf{request for product} $j$ arrives (e.g., we allow partially accepting some flight legs when an itinerary uses multiple legs).
+\item[-] Let $y_{ijt}\in\{0,1\}$ indicate whether to accept (1) or reject (0) \textbf{resource} $i$ when a \textbf{request for product} $j$ arrives (e.g., it is allowed to partially accept some flight legs when an itinerary uses multiple legs).
 \item[-] Let $\phi$ be a \textbf{fictitious resource} with infinite capacity. 
 \item[-] Let $y_t = \{y_{ijt} : i \in \mathcal{L} \cup \{\phi\}, \ j \in \mathcal{J}\}$.
 \item[-] Then, $V_t(x_t)$ can be computed as:
@@ -170,10 +224,11 @@ An \textbf{Equivalent Dynamic Program}:
 \vspace{0.5cm}
 
 \noindent
-The \textbf{Lagrangian Relaxation}:
+\textbf{Lagrangian Relaxation}:
 \begin{itemize}[itemsep=0pt,parsep=0pt]
 \item[-] Let $\lambda = \{\lambda_{ijt} : i \in \mathcal{L}, \ j \in \mathcal{J}, \ t \in \mathcal{T}\}$ denote the Lagrangian multiplier. 
 \item[-] The Lagrangian relaxation $V^{\lambda}_t(x_t)$ is defined as:
+    {\small
     \begin{align*}
         V^{\lambda}_t(x_t) &= \max_{y_t \in \mathcal{Y}(x_t)} 
             \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
@@ -184,39 +239,85 @@ The \textbf{Lagrangian Relaxation}:
             \right] \right\}
             \tag{LR} \\
     \end{align*}
+    }%
 \end{itemize}
 
 \vspace{0.5cm}
+
+\noindent
+\textbf{Lagrangian Relaxation Algorithm}:
+\begin{itemize}
+\item[-] \textbf{Goal}: 
+    The Lagrangian relaxation algorithm aims to find an optimal multiplier $\lambda^{*}$ that solves
+    \begin{align*}
+        \min_{\lambda} V^{\lambda}_{1}(c_{1}) 
+        \end{align*}
+    As shown in \cite{topaloglu2009using},
+    \begin{align*}
+        V_t(x_t) \leq V^{\lambda}_t(x_t) \quad \forall x_t \in \mathcal{C}^{|\mathcal{L}|}, \ t \in \mathcal{T}
+    \end{align*}
+    Therefore, $V^{\lambda^{*}}_{1}(c_{1})$ provides a tight bound to $V_{1}(c_{1})$.
+\item[-] \textbf{Solving $V^{\lambda}_{1}(c_{1})$ for a given $\lambda$}: 
+    It has been shown in \cite{topaloglu2009using} that $V^{\lambda}_{1}(c_{1})$ can be solved by concentrating on one resource at a time. 
+    Specifically, if \(\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}\) is a solution to the optimality equation
+    \begin{align*}
+        \vartheta^\lambda_{it}(x_{it}) 
+        = \max_{y_{it} \in \mathcal{Y}_{it}(x_{it})} 
+        \left\{ 
+            \sum_{j \in \mathcal{J}} p_{jt} 
+            \left[ 
+                \lambda_{ijt} y_{ijt} 
+                + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y_{ijt}) 
+            \right] 
+        \right\}
+        \tag{SDP}
+    \end{align*}
+    for all \(i \in \mathcal{L}\), then
+    \begin{align*}
+        V^\lambda_t(x_t) 
+        = \sum_{t' = t}^\tau \sum_{j \in \mathcal{J}} p_{jt'} 
+            \left[ f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt'} \right]^+ 
+        + \sum_{i \in \mathcal{L}} \vartheta^\lambda_{it}(x_{it}),
+    \end{align*}
+    where $[z]^+ = \max\{z, 0\}$.
+\item[-] \textbf{Minimizing $V^{\lambda}_{1}(c_{1})$ over $\lambda$}: 
+    It has also been shown in \cite{topaloglu2009using} that the Lagrangian relaxation $V^{\lambda}_{1}(c_{1})$ is convex in $\lambda$. 
+    Thus, the optimal multiplier $\lambda^*$ can be found by using classical subgradient methods.
+\end{itemize}
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Control Policy}:
+\begin{itemize}
+\item[-] The control policy is to accept a request for product $j$ at time $t$ if and only if:
+    \begin{align*}
+        f_j \geq \sum_{i \in \mathcal{L}} \sum_{r = 1}^{a_{ij}} \left[ \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - r + 1) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - r) \right]
+    \end{align*}
+    That is, a product is accepted if its revenue exceeds the opportunity cost of consumed resources. 
+    Specifically, the term $\vartheta^{\lambda^{*}}_{i,t+1}(x_{it}) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - 1)$ represents the bid price of resource $i$ at time $t$.
+\end{itemize}
+
+
+\vspace{0.5cm}
+
 
 
 % ------------------------------------------------------------------------------------------------
 % SECTION
 % ------------------------------------------------------------------------------------------------
 
-\newpage
-
-\section{Pseudocode}
-
-The Lagrangian relaxation algorithm aims to find an optimal multiplier $\lambda^{*}$ that solves
-\begin{align*}
-    \min_{\lambda} V^{\lambda}_{1}(c_{1}) 
-\end{align*}
-As shown in \cite{topaloglu2009using},
-\begin{align*}
-    V_t(x_t) \leq V^{\lambda}_t(x_t) \quad \forall x_t \in \mathcal{C}^{|\mathcal{L}|}, \ t \in \mathcal{T}
-\end{align*}
-Therefore, $V^{\lambda^{*}}_{1}(c_{1})$ provides a tight bound to $V_{1}(c_{1})$.
+\section{Implementation}
 
 \vspace{0.5cm}
 
 \noindent
 \textbf{Subgradient Optimization}: 
-Computing $V^{\lambda}_{1}(c_{1})$ is costly, and we cannot find its gradient analytically.
+Computing $V^{\lambda}_{1}(c_{1})$ is costly, and its gradient is not available analytically.
 However, the Lagrangian relaxation $V^{\lambda}_{1}(c_{1})$ is convex in $\lambda$, as shown in \cite{topaloglu2009using}. 
-Thus, we can use subgradient methods to find the optimal multiplier $\lambda^*$.
-We use a Classical Projected Subgradient Descent algorithm as a simple, robust solution.
+Thus, I will use a Classical Projected Subgradient Descent algorithm as a simple, robust solution.
 
-\begin{algorithm}
+\begin{algorithm}[H]
 \caption{Subgradient Optimization for Lagrangian Relaxation}
 \begin{algorithmic}[1]
 \Require Initial multiplier $\lambda^0$, initial step size $\alpha_0$, tolerance $\epsilon$, max iterations $K$
@@ -240,27 +341,13 @@ We use a Classical Projected Subgradient Descent algorithm as a simple, robust s
 \end{algorithmic}
 \end{algorithm}
 
-\vspace{0.5cm}
+
 
 \noindent
-\textbf{Solving $V^{\lambda}_{1}(c_{1})$ for a given $\lambda$}: 
-It has been shown in \cite{topaloglu2009using} that $V^{\lambda}_{1}(c_{1})$ can be solved by concentrating on one resource at a time. 
-Specifically, if \(\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}\) is a solution to the optimality equation
-\begin{align*}
-\vartheta^\lambda_{it}(x_{it}) = \max_{y_{it}\in\mathcal{Y}_{it}(x_{it})}\left\{\sum_{j\in\mathcal{J}} p_{jt}\left\{\lambda_{ijt} y_{ijt} + \vartheta^\lambda_{i,t+1}(x_{it} - a_{ij} y_{ijt})\right\}\right\}
-\end{align*}
-for all \(i \in \mathcal{L}\), then we have
-\begin{align*}
-V^\lambda_t(x_t) = \sum_{t' = t}^\tau \sum_{j \in \mathcal{J}} p_{jt'}\left[f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt'}\right]^+ + \sum_{i \in \mathcal{L}} \vartheta^\lambda_{it}(x_{it}).
-\end{align*}
-where $[z]^+ = \max\{z, 0\}$.
-
-\vspace{0.5cm}
-
-\noindent
+\textbf{Tabular Backward Induction Subroutine}:
 We solve the single-resource optimality equation using tabular backward induction:
 
-\begin{algorithm}
+\begin{algorithm}[H]
 \caption{Subroutine: Tabular Backward Induction for Single-Resource Dynamic Program}
 \begin{algorithmic}[1]
 \Require Resource $i$, capacities $\mathcal{C}$, time periods $\mathcal{T}$, probabilities $p_{jt}$, consumption $a_{ij}$, multipliers $\lambda_{ijt}$
@@ -285,25 +372,6 @@ We solve the single-resource optimality equation using tabular backward inductio
 \State \Return $\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$ and $\{y^*_{ijt}(x_{it}): j \in \mathcal{J}, x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$
 \end{algorithmic}
 \end{algorithm}
-
-\vspace{0.5cm}
-
-
-
-
-% ------------------------------------------------------------------------------------------------
-% SECTION
-% ------------------------------------------------------------------------------------------------
-
-\section{Control Policy}
-
-\noindent
-The optimal control is to accept a request for product $j$ at time $t$ if and only if:
-\begin{align*}
-f_j \geq \sum_{i \in \mathcal{L}} \sum_{r = 1}^{a_{ij}} \left[ \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - r + 1) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - r) \right]
-\end{align*}
-That is, we accept a product if its revenue exceeds the opportunity cost of consumed resources. 
-The term $\vartheta^{\lambda^{*}}_{i,t+1}(x_{it}) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - 1)$ represents the bid price of resource $i$ at time $t$.
 
 \vspace{0.5cm}
 

@@ -103,7 +103,7 @@ The method should address:
 - Let $u_{jt} \in \{0,1\}$ indicate whether to accept (1) or reject (0) a request for product $j$.
 - Let $V_t(x_t)$ be the maximum expected revenue from period $t$ to $\tau$ given capacities $x_t$:
 
-$$
+\[
 \begin{align*}
 V_t(x_t) = \max_{u_t \in \mathcal{U}(x_t)} 
     \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
@@ -113,7 +113,7 @@ V_t(x_t) = \max_{u_t \in \mathcal{U}(x_t)}
     \right] \right\}
 \tag{DP1}
 \end{align*}
-$$
+\]
 
 where
 

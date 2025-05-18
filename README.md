@@ -108,7 +108,7 @@ V_t(x_t) = \max_{u_t \in \mathcal{U}(x_t)}
     \left\{ \sum_{j\in \mathcal{J}} p_{jt} 
     \left[ 
         f_j u_{jt} + 
-        V_{t+1} \left(x_t - u_{jt}\sum_{i\in \mathcal{L}}a_{ij}e_i\right) 
+        V_{t+1} \big(x_t - u_{jt}\sum_{i\in \mathcal{L}}a_{ij}e_i\big) 
     \right] \right\}
 \tag{DP1}
 $$

@@ -183,13 +183,17 @@ $$
 The Lagrangian relaxation algorithm aims to find an optimal multiplier $\lambda^{*}$ that solves
 
 $$
+\begin{align*}
 \min_{\lambda} V^{\lambda}_{1}(c_{1})
+\end{align*}
 $$
 
 As shown in [Topaloglu 2009], we have
 
 $$
+\begin{align*}
 V_t(x_t) \leq V^{\lambda}_t(x_t) \quad \forall x_t \in \mathcal{C}^{|\mathcal{L}|}, \ t \in \mathcal{T}
+\end{align*}
 $$
 
 Therefore, $V^{\lambda^{*}}_{1}(c_{1})$ provides a tight bound to $V_{1}(c_{1})$.
@@ -198,13 +202,17 @@ It has been shown in [Topaloglu 2009] that given $\lambda$, the value of $V^{\la
 Specifically, if $\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$ is a solution to the optimality equation
 
 $$
+\begin{align*}
 \vartheta^\lambda_{it}(x_{it}) = \max_{y_{it}\in\mathcal{Y}_{it}(x_{it})} \left\{ \sum_{j\in\mathcal{J}} p_{jt} \left[ \lambda_{ijt} y_{ijt} + \vartheta^\lambda_{i,t+1}(x_{it} - a_{ij} y_{ijt}) \right] \right\}
+\end{align*}
 $$
 
 for all $i \in \mathcal{L}$, then
 
 $$
+\begin{align*}
 V^\lambda_t(x_t) = \sum_{t' = t}^\tau \sum_{j \in \mathcal{J}} p_{jt'} \left[ f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt'} \right]^+ + \sum_{i \in \mathcal{L}} \vartheta^\lambda_{it}(x_{it})
+\end{align*}
 $$
 
 where $[z]^+ = \max\{z, 0\}$.

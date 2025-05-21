@@ -5,6 +5,7 @@
 \usepackage{amssymb}
 \usepackage{amsthm}
 \usepackage{mathtools}
+\usepackage{cancel}
 \usepackage{graphicx}
 \usepackage{enumitem}
 \usepackage{hyperref}
@@ -235,9 +236,9 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
             \left[ 
                 f_j y_{\phi jt} +
                 \sum_{i \in \mathcal{L}} \lambda_{ijt} (y_{ijt} - y_{\phi jt}) + 
-                V_{t+1} \left(x_t - \sum_{i\in \mathcal{L}}y_{ijt}a_{ij}e_i\right) 
+                V^{\lambda}_{t+1} \left(x_t - \sum_{i\in \mathcal{L}}y_{ijt}a_{ij}e_i\right) 
             \right] \right\}
-            \tag{LR} \\
+            \tag{LR} 
     \end{align*}
     }%
 \end{itemize}
@@ -273,12 +274,13 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
         \tag{SDP}
     \end{align*}
     for all \(i \in \mathcal{L}\), then
-    \begin{align*}
+    \begin{align}
         V^\lambda_t(x_t) 
         = \sum_{t' = t}^\tau \sum_{j \in \mathcal{J}} p_{jt'} 
             \left[ f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt'} \right]^+ 
         + \sum_{i \in \mathcal{L}} \vartheta^\lambda_{it}(x_{it}),
-    \end{align*}
+        \label{eq:lagrangian_relaxation_algorithm}
+    \end{align}
     where $[z]^+ = \max\{z, 0\}$.
 \item[-] \textbf{Minimizing $V^{\lambda}_{1}(c_{1})$ over $\lambda$}: 
     It has also been shown in \cite{topaloglu2009using} that the Lagrangian relaxation $V^{\lambda}_{1}(c_{1})$ is convex in $\lambda$. 
@@ -309,42 +311,18 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 
 \section{Implementation}
 
+\noindent
+\textbf{Note:} \cite{topaloglu2009using} did not provide any specific implementation details or the choice of algorithms. Thus, I need to do my own implementation. What follows are my own implementation steps.
+
 \vspace{0.5cm}
 
-\noindent
-\textbf{Subgradient Optimization}: 
-Computing $V^{\lambda}_{1}(c_{1})$ is costly, and its gradient is not available analytically.
-However, the Lagrangian relaxation $V^{\lambda}_{1}(c_{1})$ is convex in $\lambda$, as shown in \cite{topaloglu2009using}. 
-Thus, I will use a Classical Projected Subgradient Descent algorithm as a simple, robust solution.
-
-\begin{algorithm}[H]
-\caption{Subgradient Optimization for Lagrangian Relaxation}
-\begin{algorithmic}[1]
-\Require Initial multiplier $\lambda^0$, initial step size $\alpha_0$, tolerance $\epsilon$, max iterations $K$
-\Ensure Optimal multiplier $\lambda^*$
-\State $k \gets 0$
-\State $V_{\text{prev}} \gets \infty$
-\While{$k < K$}
-    \State Compute $V^{\lambda^k}_{1}(c_{1})$ \Comment{Evaluate current objective}
-    \If{$|V^{\lambda^k}_{1}(c_{1}) - V_{\text{prev}}| < \epsilon$}
-        \State \textbf{break} \Comment{Convergence achieved}
-    \EndIf
-    \State $V_{\text{prev}} \gets V^{\lambda^k}_{1}(c_{1})$
-    \State Generate random unit vector $d$
-    \State Compute $V^{\lambda^k + \delta d}_{1}(c_{1})$ \Comment{Perturbed objective}
-    \State $g^k \gets \frac{V^{\lambda^k + \delta d}_{1}(c_{1}) - V^{\lambda^k}_{1}(c_{1})}{\delta} \cdot d$ \Comment{Approximate subgradient}
-    \State $\alpha_k \gets \frac{\alpha_0}{\sqrt{k+1}}$ \Comment{Update step size}
-    \State $\lambda^{k+1} \gets \max\{0, \lambda^k - \alpha_k g^k\}$ \Comment{Component-wise projection onto $\Lambda = \{\lambda \geq 0\}$}
-    \State $k \gets k + 1$
-\EndWhile
-\State \Return $\lambda^k$
-\end{algorithmic}
-\end{algorithm}
 
 
+% ------------------------------------------------------------------------------------------------
+
+\subsection{Subroutine: Solving the Single-Resource Dynamic Program}
 
 \noindent
-\textbf{Tabular Backward Induction Subroutine}:
 We solve the single-resource optimality equation using tabular backward induction:
 
 \begin{algorithm}[H]
@@ -370,6 +348,167 @@ We solve the single-resource optimality equation using tabular backward inductio
     \EndFor
 \EndFor
 \State \Return $\{\vartheta^\lambda_{it}(x_{it}): x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$ and $\{y^*_{ijt}(x_{it}): j \in \mathcal{J}, x_{it} \in \mathcal{C}, t \in \mathcal{T}\}$
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.5cm}
+
+{\color{blue}
+
+
+% ------------------------------------------------------------------------------------------------
+
+\subsection{Subroutine: Computing the Subgradient of $\vartheta^\lambda_{it}(x_{it})$}
+\label{subroutine:computing_subgradient}
+
+\noindent
+Consider any resource $i$. 
+Note that: 
+\begin{align*}
+    \vartheta^\lambda_{it}(x_{it}) 
+    &= \max_{y_{it} \in \mathcal{Y}_{it}(x_{it})} 
+    \left\{ 
+        \sum_{j \in \mathcal{J}} p_{jt} 
+        \left[ 
+            \lambda_{ijt} y_{ijt} 
+            + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y_{ijt}) 
+        \right] 
+    \right\} \\
+    &= \sum_{j \in \mathcal{J}} p_{jt} 
+        \left[ 
+            \lambda_{ijt} y^{*\lambda}_{ijt} 
+            + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y^{*\lambda}_{ijt}) 
+        \right] . 
+\end{align*}
+Let \( \mu_{it}(x_{it}) \) be the probability mass function of the capacity of resource $i$ at time $t$. 
+It is given by:
+\begin{align*}
+    \mu_{i,t+1}(x') &= \sum_{x} \mu_{it}(x) \sum_{j \in \mathcal{J}} p_{jt} \mathbb{I}\left\{x' = x - a_{ij}y_{ijt}^*(x)\right\} .
+\end{align*}
+To compute the subgradient of $\vartheta^\lambda_{i1}(c_{i})$ with respect to $\lambda_{ijt}$, let
+\begin{align*}
+    \mu_{i1}(x) &= 
+        \begin{cases}
+        1 & \text{if } x = c_i, \\
+        0 & \text{otherwise.}
+        \end{cases}
+\end{align*}
+Then, we have:
+\begin{align*}
+    \frac{\partial \vartheta^\lambda_{i1}(c_{i})}{\partial \lambda_{ijt}} 
+    &= \sum_{x} \mu_{it}(x) y^{*\lambda}_{ijt}(x) 
+\end{align*}
+
+\begin{algorithm}[H]
+\caption{Forward Pass for Computing $\mu_{it}(x_{it})$}
+\begin{algorithmic}[1]
+    \State \textbf{Initialize:} $\mu_{i1}(x) \gets 1$ if $x = c_i$, else $0$ \Comment{$x \in \mathcal{C} = \{0, 1, \ldots, C\}$}
+    \For{$t = 1$ to $\tau-1$}
+        \For{each $x'$ in $\mathcal{C}$} \Comment{$x' \in \mathcal{C} = \{0, 1, \ldots, C\}$}
+            \State $\mu_{i, t+1}(x') \gets 0$
+        \EndFor
+        \For{each $x$ in $\mathcal{C}$} \Comment{$x \in \mathcal{C} = \{0, 1, \ldots, C\}$}
+            \For{each $j \in \mathcal{J}$}
+                \State $x' \gets x - a_{ij} y_{ijt}^*(x)$
+                \If{$x'$ is a valid capacity} \Comment{$x' \in \mathcal{C}$}
+                    \State $\mu_{i, t+1}(x') \gets \mu_{i, t+1}(x') + \mu_{it}(x) \cdot p_{jt}$
+                \EndIf
+            \EndFor
+        \EndFor
+    \EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+
+\subsection{Subgradient Optimization: Alternative 1}
+
+% \noindent
+% After solving the single-resource dynamic programs, we obtain the optimal decisions $y^{*\lambda}_{ijt}(x_{it})$ for all physical resources $i \in \mathcal{L}$. For the fictitious resource $\phi$, the optimal decision is:
+
+% $$y^{*\lambda}_{\phi jt} = 
+% \begin{cases} 
+% 1 & \text{if } f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt} \ge 0 \\
+% 0 & \text{otherwise}
+% \end{cases}$$
+
+% \noindent
+% The complete optimal solution to the Lagrangian Relaxation is therefore:
+% \begin{itemize}[itemsep=0pt,parsep=0pt]
+% \item[-] $y^{*\lambda}_{ijt}(x_{it})$ for all $i \in \mathcal{L}$, $j \in \mathcal{J}$, $t \in \mathcal{T}$, $x_{it} \in \mathcal{C}$ (from backward induction)
+% \item[-] $y^{*\lambda}_{\phi jt}$ for all $j \in \mathcal{J}$, $t \in \mathcal{T}$ (as defined above)
+% \end{itemize}
+
+\noindent
+Using \eqref{eq:lagrangian_relaxation_algorithm} and Subsection \ref{subroutine:computing_subgradient}, we have: 
+\begin{align*}
+    \frac{\partial V^{\lambda}_{1}(c_{1})}{\partial \lambda_{ijt}} 
+    &= \frac{\partial \vartheta^\lambda_{i1}(c_{i})}{\partial \lambda_{ijt}} 
+    - p_{jt} \,\mathbf{1}\left\{f_j - \sum_{k \in \mathcal{L}} \lambda_{kjt} \ge 0\right\} 
+\end{align*}
+Note that as a Lagrangian multiplier, $\lambda_{ijt} \ge 0$. 
+Thus, here we use a projected subgradient descent algorithm to optimize $\lambda$.
+\begin{algorithm}[H]
+\caption{Projected Subgradient Descent for Lagrangian Multiplier Optimization}
+\begin{algorithmic}[1]
+\Require Initial multipliers $\lambda^0$, step size $\alpha_0$, tolerance $\epsilon$, maximum iterations $K$
+\Ensure Optimized multipliers $\lambda^*$
+\State $k \gets 0$
+\State $V_{\text{prev}} \gets \infty$
+\While{$k < K$}
+    \State Compute $V^{\lambda^k}_{1}(c_{1})$
+    \If{$|V^{\lambda^k}_{1}(c_{1}) - V_{\text{prev}}| < \epsilon$}
+        \State \textbf{break}
+    \EndIf
+    \State $V_{\text{prev}} \gets V^{\lambda^k}_{1}(c_{1})$
+    \State Compute subgradient $g^k$ of $V^{\lambda^k}_{1}(c_{1})$ with respect to $\lambda$. 
+    \State $\alpha_k \gets \frac{\alpha_0}{\sqrt{k+1}}$
+    \State $\lambda^{k+1} \gets \max\{0, \lambda^k - \alpha_k g^k\}$ \Comment{Project onto feasible set}
+    \State $k \gets k + 1$
+\EndWhile
+\State \Return $\lambda^k$
+\end{algorithmic}
+\end{algorithm}
+
+
+}%
+
+\vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+
+\subsection{Subgradient Optimization: Alternative 2}
+
+\noindent
+Without computing subgradient analytically, we can use the following algorithm to optimize $\lambda$: 
+
+\begin{algorithm}[H]
+\caption{Subgradient Optimization for Lagrangian Relaxation}
+\begin{algorithmic}[1]
+\Require Initial multiplier $\lambda^0$, initial step size $\alpha_0$, tolerance $\epsilon$, max iterations $K$
+\Ensure Optimal multiplier $\lambda^*$
+\State $k \gets 0$
+\State $V_{\text{prev}} \gets \infty$
+\While{$k < K$}
+    \State Compute $V^{\lambda^k}_{1}(c_{1})$ \Comment{Evaluate current objective}
+    \If{$|V^{\lambda^k}_{1}(c_{1}) - V_{\text{prev}}| < \epsilon$}
+        \State \textbf{break} \Comment{Convergence achieved}
+    \EndIf
+    \State $V_{\text{prev}} \gets V^{\lambda^k}_{1}(c_{1})$
+    \State Generate random unit vector $d$
+    \State Compute $V^{\lambda^k + \delta d}_{1}(c_{1})$ \Comment{Perturbed objective}
+    \State $g^k \gets \frac{V^{\lambda^k + \delta d}_{1}(c_{1}) - V^{\lambda^k}_{1}(c_{1})}{\delta} \cdot d$ \Comment{Approximate subgradient}
+    \State $\alpha_k \gets \frac{\alpha_0}{\sqrt{k+1}}$ \Comment{Update step size}
+    \State $\lambda^{k+1} \gets \max\{0, \lambda^k - \alpha_k g^k\}$ \Comment{Component-wise projection onto $\Lambda = \{\lambda \geq 0\}$}
+    \State $k \gets k + 1$
+\EndWhile
+\State \Return $\lambda^k$
 \end{algorithmic}
 \end{algorithm}
 

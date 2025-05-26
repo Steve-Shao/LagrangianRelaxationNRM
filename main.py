@@ -57,75 +57,150 @@ class InstanceRM:
 
     def _parse_file(self, filepath: str):
         """
-        Parse the airline RM instance file and populate the attributes.
+        Parse the airline RM instance file and populate the instance attributes.
+
+        The method reads the file line by line, interpreting sections based on the
+        format specified in the class docstring. It extracts data for time periods,
+        flight legs (with capacities), itineraries (with fares), and time-indexed
+        demand probabilities. This data is then used to populate the various
+        attributes of the `InstanceRM` object, such as `self.T`, `self.flight_legs`,
+        `self.C`, `self.A`, `self.probabilities`, etc.
 
         Args:
             filepath (str): Path to the instance file.
 
         Populates:
-            self.T, self.flight_legs, self.C, self.L, self.itineraries, self.F, self.J, self.probabilities, self.A
+            self.T: Number of time periods.
+            self.flight_legs: NumPy array of flight leg names (e.g., "O1D2").
+            self.C: NumPy array of capacities for each flight leg.
+            self.L: Number of flight legs.
+            self.itineraries: NumPy array of itinerary names (e.g., "O1D2F3").
+            self.F: NumPy array of fares for each itinerary.
+            self.J: Number of itineraries.
+            self.probabilities: NumPy array (T, J) of demand probabilities.
+            self.A: NumPy array (L, J), the flight leg-itinerary incidence matrix.
         """
-        # Read all non-comment, non-empty lines
         with open(filepath, 'r') as f:
+            # Read all lines, stripping whitespace and removing comments/empty lines.
             lines = [line.strip() for line in f if line.strip() and not line.lstrip().startswith('#')]
 
-        idx = 0
-        num_time_periods = int(lines[idx]); idx += 1
-        num_flight_legs = int(lines[idx]); idx += 1
+        line_iterator = iter(lines)
 
-        # Parse flight legs
-        flight_legs_list = []
-        capacities_list = []
-        for parts in (lines[i].split() for i in range(idx, idx + num_flight_legs)):
-            o, d, cap = int(parts[0]), int(parts[1]), int(parts[2])
-            flight_legs_list.append(f"O{o}D{d}")
-            capacities_list.append(cap)
-        idx += num_flight_legs
-
-        num_itineraries = int(lines[idx]); idx += 1
-
-        # Parse itineraries and fares
-        itineraries_info_list = []
-        itineraries_list = []
-        fares_list = []
-        for parts in (lines[i].split() for i in range(idx, idx + num_itineraries)):
-            o, d, c, fare = int(parts[0]), int(parts[1]), int(parts[2]), float(parts[3])
-            itineraries_info_list.append((o, d, c))
-            itineraries_list.append(f"O{o}D{d}F{c}")
-            fares_list.append(fare)
-        idx += num_itineraries
-
-        # Initialize matrices
-        A_matrix = np.zeros((num_flight_legs, num_itineraries), int)
-        prob_matrix = np.zeros((num_time_periods, num_itineraries), float)
-        leg_to_idx = {leg: i for i, leg in enumerate(flight_legs_list)}
-        itinerary_to_idx = {info: j for j, info in enumerate(itineraries_info_list)}
-
-        # Fill A matrix
-        for j, (o, d, _) in enumerate(itineraries_info_list):
-            if o == 0 or d == 0: # Single leg itinerary
-                A_matrix[leg_to_idx[f"O{o}D{d}"], j] = 1
-            else: # Two-leg itinerary (connecting via hub 0)
-                A_matrix[leg_to_idx[f"O{o}D0"], j] = 1
-                A_matrix[leg_to_idx[f"O0D{d}"], j] = 1
+        # Section 1: Read global parameters
+        # First line: τ (number of time periods)
+        num_time_periods = int(next(line_iterator))
         
-        # Regex pattern for parsing probabilities
-        # Matches patterns like "[ o d c ] p"
-        prob_pattern = re.compile(r"\[\s*(\d+)\s+(\d+)\s+(\d+)\s*\]\s*([\d.eE+-]+)")
-        for t in range(num_time_periods):
-            for o, d, c, p_val in prob_pattern.findall(lines[idx]):
-                prob_matrix[t, itinerary_to_idx[(int(o), int(d), int(c))]] = float(p_val)
-            idx += 1
+        # Second line: N (number of flight legs)
+        num_flight_legs = int(next(line_iterator))
 
-        # Store results as numpy arrays
+        # Section 2: Parse Flight Leg Definitions
+        # Next N lines: origin_id destination_id capacity
+        parsed_flight_legs_list = []
+        parsed_capacities_list = []
+        for _ in range(num_flight_legs):
+            line_content = next(line_iterator)
+            parts = line_content.split()
+            leg_origin_id, leg_dest_id, leg_capacity = int(parts[0]), int(parts[1]), int(parts[2])
+            
+            # Flight leg names are formatted as "O{origin}D{destination}"
+            leg_name = f"O{leg_origin_id}D{leg_dest_id}"
+            parsed_flight_legs_list.append(leg_name)
+            parsed_capacities_list.append(leg_capacity)
+
+        # Line after flight legs: M (number of itineraries)
+        num_itineraries = int(next(line_iterator))
+
+        # Section 3: Parse Itinerary Definitions
+        # Next M lines: origin_id destination_id fare_class_id fare_value
+        # These o, d, c define the overall itinerary.
+        itinerary_key_tuples = [] # Stores (origin_id, dest_id, fare_class_id) tuples for mapping
+        parsed_itineraries_list = []    # Stores "O{o}D{d}F{c}" formatted names
+        parsed_fares_list = []
+        for _ in range(num_itineraries):
+            line_content = next(line_iterator)
+            parts = line_content.split()
+            itin_origin_id, itin_dest_id, itin_fare_class_id, itin_fare_value = \
+                int(parts[0]), int(parts[1]), int(parts[2]), float(parts[3])
+            
+            # Itinerary names are formatted as "O{origin}D{destination}F{fare_class}"
+            itinerary_name = f"O{itin_origin_id}D{itin_dest_id}F{itin_fare_class_id}"
+            parsed_itineraries_list.append(itinerary_name)
+            parsed_fares_list.append(itin_fare_value)
+            
+            # This tuple (o,d,c) serves as a unique key for the itinerary definition.
+            itinerary_key = (itin_origin_id, itin_dest_id, itin_fare_class_id)
+            itinerary_key_tuples.append(itinerary_key)
+
+        # Section 4: Initialize Data Structures and Mappings
+        # Create mappings for quick lookup of leg/itinerary indices.
+        leg_to_idx = {name: i for i, name in enumerate(parsed_flight_legs_list)}
+        itinerary_to_idx = {key: j for j, key in enumerate(itinerary_key_tuples)}
+
+        # Initialize A matrix (leg-itinerary incidence) and probability matrix.
+        A_matrix = np.zeros((num_flight_legs, num_itineraries), dtype=int)
+        probabilities_matrix = np.zeros((num_time_periods, num_itineraries), dtype=float)
+
+        # Section 5: Populate A Matrix (Leg-Itinerary Incidence)
+        # This logic determines which flight legs are part of each itinerary.
+        # It assumes a hub-spoke model where '0' is the hub.
+        for j, (itin_o, itin_d, _) in enumerate(itinerary_key_tuples):
+            # (itin_o, itin_d) are the overall origin and destination of itinerary j.
+            
+            # Case 1: Itinerary's origin or destination is the hub (0).
+            # This is treated as a single-leg itinerary.
+            # Example: Itinerary (0, 5, 1) (O0D5F1) uses leg "O0D5".
+            if itin_o == 0 or itin_d == 0:
+                single_leg_name = f"O{itin_o}D{itin_d}"
+                if single_leg_name in leg_to_idx:
+                    A_matrix[leg_to_idx[single_leg_name], j] = 1
+                # else: Consider error handling for missing leg.
+            
+            # Case 2: Itinerary is between two non-hub airports.
+            # This is assumed to be a two-leg itinerary connecting via hub 0.
+            # Example: Itinerary (3, 5, 1) (O3D5F1) uses legs "O3D0" and "O0D5".
+            else:
+                leg1_name = f"O{itin_o}D0"  # Leg from itinerary origin to hub
+                leg2_name = f"O0D{itin_d}"  # Leg from hub to itinerary destination
+                
+                if leg1_name in leg_to_idx:
+                    A_matrix[leg_to_idx[leg1_name], j] = 1
+                # else: Consider error handling for missing leg.
+                
+                if leg2_name in leg_to_idx:
+                    A_matrix[leg_to_idx[leg2_name], j] = 1
+                # else: Consider error handling for missing leg.
+        
+        # Section 6: Parse Demand Probabilities
+        # Next τ lines: each line lists demand probabilities for that time period.
+        # Format: "[o d c] p  [o d c] p ..."
+        
+        # Regex to capture "[ o d c ] p" patterns.
+        prob_entry_pattern = re.compile(r"\[\s*(\d+)\s+(\d+)\s+(\d+)\s*\]\s*([\d.eE+-]+)")
+
+        for t in range(num_time_periods):
+            current_prob_line = next(line_iterator)
+            
+            # Find all itinerary probability entries in the current line.
+            for o_str, d_str, c_str, p_str in prob_entry_pattern.findall(current_prob_line):
+                itinerary_key_for_prob = (int(o_str), int(d_str), int(c_str))
+                probability_value = float(p_str)
+                
+                if itinerary_key_for_prob in itinerary_to_idx:
+                    j = itinerary_to_idx[itinerary_key_for_prob]
+                    probabilities_matrix[t, j] = probability_value
+                # else: Consider error handling for itinerary in prob data not defined earlier.
+        
+        # Section 7: Store Parsed Data into Instance Attributes
         self.T = num_time_periods
-        self.flight_legs = np.array(flight_legs_list, dtype='<U10')
-        self.C = np.array(capacities_list, dtype=int)
-        self.L = len(self.flight_legs)
-        self.itineraries = np.array(itineraries_list, dtype='<U20')
-        self.F = np.array(fares_list, dtype=float)
-        self.J = len(self.itineraries)
-        self.probabilities = prob_matrix
+        self.flight_legs = np.array(parsed_flight_legs_list, dtype='<U10')
+        self.C = np.array(parsed_capacities_list, dtype=int)
+        self.L = num_flight_legs
+        
+        self.itineraries = np.array(parsed_itineraries_list, dtype='<U20')
+        self.F = np.array(parsed_fares_list, dtype=float)
+        self.J = num_itineraries
+        
+        self.probabilities = probabilities_matrix
         self.A = A_matrix
 
     def _ensure_probabilities_sum_to_one(self):
@@ -220,91 +295,195 @@ class InstanceRM:
         leg_capacity = self.C[leg_idx]
         J = self.J
         T = self.T
-        leg_consumptions_j = self.A[leg_idx, :]  # (J,)
-        probs_jt = self.probabilities.T  # (J, T)
-        leg_lambdas_jt = self.lmd[leg_idx, :, :]  # (J, T)
+        leg_consumptions_j = self.A[leg_idx, :]  # Shape: (J,)
+        probs_jt = self.probabilities.T  # Shape: (J, T)
+        leg_lambdas_jt = self.lmd[leg_idx, :, :]  # Shape: (J, T)
 
+        # vartheta_table[c, t] stores V_t(c) for capacity c at time t
         vartheta_table = np.zeros((leg_capacity + 1, T + 1))
+        # y_star[j, c, t] stores optimal decision for product j, capacity c, time t
         y_star = np.zeros((J, leg_capacity + 1, T), dtype=int)
-        capacity_states = np.arange(leg_capacity + 1)
+        
+        # Array of capacity states [0, 1, ..., leg_capacity]
+        capacity_states = np.arange(leg_capacity + 1) # Shape: (leg_capacity + 1,)
 
-        consumptions_bc = leg_consumptions_j.reshape(-1, 1)
-        capacity_states_bc = capacity_states.reshape(1, -1)
-        sufficient_capacity_mask = (consumptions_bc <= capacity_states_bc)
+        # Broadcastable versions of consumptions and capacity states
+        # consumptions_bc[j, c] = leg_consumptions_j[j]
+        consumptions_bc = leg_consumptions_j.reshape(-1, 1)  # Shape: (J, 1)
+        # capacity_states_bc[j, c] = capacity_states[c]
+        capacity_states_bc = capacity_states.reshape(1, -1)  # Shape: (1, leg_capacity + 1)
 
+        # sufficient_capacity_mask[j, c] is True if product j can be accepted with capacity c
+        sufficient_capacity_mask = (consumptions_bc <= capacity_states_bc)  # Shape: (J, leg_capacity + 1)
+
+        # Backward induction loop through time
         for t in range(T - 1, -1, -1):
-            next_t_value_func = vartheta_table[:, t + 1]
-            current_t_lambdas_j = leg_lambdas_jt[:, t].reshape(-1, 1)
+            # Value function for the next time period V_{t+1}(c)
+            next_t_value_func = vartheta_table[:, t + 1]  # Shape: (leg_capacity + 1,)
+            
+            # Lagrange multipliers for the current time period lambda_{ijt}
+            current_t_lambdas_j = leg_lambdas_jt[:, t].reshape(-1, 1)  # Shape: (J, 1)
+
+            # Calculate capacity if product j is accepted: c - a_ij
+            # Shape: (J, leg_capacity + 1)
             capacity_if_accept = capacity_states_bc - consumptions_bc
-            valid_capacity_indices_if_accept = np.maximum(0, capacity_if_accept)
-            future_value_if_accept = np.full((J, leg_capacity + 1), -np.inf)
-            for j_idx in range(J):
-                for cap_idx in range(leg_capacity + 1):
-                    if sufficient_capacity_mask[j_idx, cap_idx]:
-                        future_value_if_accept[j_idx, cap_idx] = next_t_value_func[valid_capacity_indices_if_accept[j_idx, cap_idx]]
-            val_accept = current_t_lambdas_j + future_value_if_accept
-            val_reject = next_t_value_func.reshape(1, -1)
-            current_t_optimal_decisions = (val_accept > val_reject).astype(int)
+            
+            # Clip capacities at 0, as capacity cannot be negative
+            # These are the indices for next_t_value_func
+            valid_capacity_indices_if_accept = np.maximum(0, capacity_if_accept) # Shape: (J, leg_capacity + 1)
+
+            # Calculate V_{t+1}(c - a_ij)
+            # Initialize with -np.inf for cases where capacity is insufficient
+            future_value_if_accept = np.full((J, leg_capacity + 1), -np.inf, dtype=float)
+            
+            # Get values from next_t_value_func using valid_capacity_indices_if_accept as indices
+            potential_future_values = next_t_value_func[valid_capacity_indices_if_accept] # Shape: (J, leg_capacity + 1)
+            
+            # Apply these values only where capacity is sufficient
+            future_value_if_accept = np.where(sufficient_capacity_mask, potential_future_values, -np.inf)
+
+            # Value if product j is accepted: lambda_ij + V_{t+1}(c - a_ij)
+            val_accept = current_t_lambdas_j + future_value_if_accept  # Shape: (J, leg_capacity + 1)
+            
+            # Value if product j is rejected: V_{t+1}(c)
+            # Reshape for broadcasting with val_accept
+            val_reject = next_t_value_func.reshape(1, -1)  # Shape: (1, leg_capacity + 1)
+            
+            # Optimal decision: accept if val_accept > val_reject
+            current_t_optimal_decisions = (val_accept > val_reject).astype(int)  # Shape: (J, leg_capacity + 1)
             y_star[:, :, t] = current_t_optimal_decisions
+
+            # Capacity after making the optimal decision: c - a_ij * y*_ij(c)
+            # Shape: (J, leg_capacity + 1)
             capacity_after_decision = capacity_states_bc - consumptions_bc * current_t_optimal_decisions
-            capacity_after_decision = np.maximum(0, capacity_after_decision)
-            value_at_cap_after_decision = np.zeros_like(capacity_after_decision, dtype=np.float64)
-            for j_ in range(J):
-                for c_ in range(leg_capacity + 1):
-                    value_at_cap_after_decision[j_, c_] = next_t_value_func[capacity_after_decision[j_, c_]]
-            sum_val = probs_jt[:, t].reshape(-1, 1) * (
+            capacity_after_decision = np.maximum(0, capacity_after_decision) # Clip at 0
+
+            # V_{t+1}(c - a_ij * y*_ij(c))
+            # Shape: (J, leg_capacity + 1)
+            value_at_cap_after_decision = next_t_value_func[capacity_after_decision]
+            
+            # Expected value contribution for each product j:
+            # p_jt * (lambda_ijt * y*_ijt(c) + V_{t+1}(c - a_ij * y*_ijt(c)))
+            # Shape: (J, leg_capacity + 1)
+            expected_value_contribution = probs_jt[:, t].reshape(-1, 1) * (
                 current_t_lambdas_j * current_t_optimal_decisions + value_at_cap_after_decision
             )
-            vartheta_table[:, t] = np.sum(sum_val, axis=0)
+            
+            # V_t(c) = sum over j of expected_value_contribution
+            # Sum over axis 0 (products)
+            vartheta_table[:, t] = np.sum(expected_value_contribution, axis=0) # Shape: (leg_capacity + 1,)
+            
         return vartheta_table, y_star
 
     def compute_state_probabilities(self, leg_idx: int, y_star: np.ndarray) -> np.ndarray:
         """
-        Compute state occupancy probabilities mu[t, x] for resource i.
-        Pure numpy implementation (no numba).
+        Compute state occupancy probabilities mu[t, x] for resource i (leg_idx).
+        Vectorized numpy implementation.
+
+        Args:
+            leg_idx (int): Index of the leg.
+            y_star (np.ndarray): Optimal policies for this leg, shape (J, C_i+1, T).
+                                 y_star[j, cap, t] is 1 if accept product j at capacity cap at time t, else 0.
+
         Returns:
-            mu_table: (T, C+1)
+            mu_table (np.ndarray): State probabilities, shape (T, C_i+1).
+                                   mu_table[t, cap] is P(capacity = cap at time t).
         """
-        leg_capacity = self.C[leg_idx]
-        if leg_capacity < 0:
+        leg_capacity = self.C[leg_idx]  # Initial capacity for this leg C_i
+        
+        if leg_capacity < 0: # Should ideally not happen with valid inputs
             return np.zeros((self.T, 0))
-        T = self.T
-        J = self.J
-        probs_jt = self.probabilities.T  # (J, T)
-        A_leg_consumption_j = self.A[leg_idx, :]  # (J,)
-        mu_table = np.zeros((T, leg_capacity + 1))
+
+        if self.T == 0:
+            return np.zeros((0, leg_capacity + 1))
+
+        # mu_table[t, cap_val] stores the probability of having cap_val capacity at time t
+        # Dimensions: T rows (time periods), leg_capacity + 1 columns (capacity states 0 to C_i)
+        mu_table = np.zeros((self.T, leg_capacity + 1))
+
+        # Initial condition: at t=0, leg has its full initial capacity C_i with probability 1.
+        # mu_table[0, C_i] = 1.0. If C_i is 0, mu_table[0,0] = 1.0.
         mu_table[0, leg_capacity] = 1.0
-        capacity_states = np.arange(leg_capacity + 1)
-        A_leg_consumption_j_bc = A_leg_consumption_j.reshape(-1, 1)
+        
+        # Local constant for probability threshold
         epsilon_prob = 1e-9
 
-        for t in range(T - 1):
-            mu_next_t = np.zeros(leg_capacity + 1)
-            active_capacity_indices = np.where(mu_table[t] > epsilon_prob)[0]
-            if active_capacity_indices.shape[0] == 0:
-                mu_table[t + 1] = mu_next_t
+        # probs_jt[j, t] is probability of product j arriving at time t
+        probs_jt = self.probabilities.T  # Shape: (J, T)
+        
+        # A_leg_consumption_j[j] is consumption of leg by product j
+        A_leg_consumption_j = self.A[leg_idx, :]  # Shape: (J,)
+        # Broadcast A_leg_consumption_j for calculations: (J, 1)
+        A_leg_consumption_j_bc = A_leg_consumption_j.reshape(-1, 1)
+
+        # Iterate over time periods t = 0, ..., T-2 to compute mu_table[t+1]
+        for t in range(self.T - 1):
+            mu_current_t_probs = mu_table[t, :] # Probabilities of capacity states at current time t. Shape: (C_i+1,)
+            mu_next_t_probs = np.zeros(leg_capacity + 1) # Initialize probs for next time t+1. Shape: (C_i+1,)
+
+            # Find active capacity states at time t (states with P(cap) > epsilon_prob)
+            # active_capacity_values are the actual capacity values that are active (e.g., [c1, c2, ...])
+            active_capacity_values = np.where(mu_current_t_probs > epsilon_prob)[0]
+
+            if active_capacity_values.shape[0] == 0: # No reachable states at time t
+                mu_table[t + 1, :] = mu_next_t_probs # which is all zeros
                 continue
-            active_capacity_states_arr = capacity_states[active_capacity_indices]
-            active_state_probs_arr = mu_table[t, active_capacity_indices]
-            current_t_probs_j = probs_jt[:, t]
-            prob_sum_requests_at_t = np.sum(current_t_probs_j)
-            prob_no_request = max(0.0, 1.0 - prob_sum_requests_at_t)
-            if prob_no_request > epsilon_prob:
-                for i in range(active_capacity_states_arr.shape[0]):
-                    cap_state = active_capacity_states_arr[i]
-                    prob_mass = active_state_probs_arr[i]
-                    mu_next_t[cap_state] += prob_mass * prob_no_request
-            y_star_slice = y_star[:, active_capacity_indices, t]
-            cap_reduction = A_leg_consumption_j_bc * y_star_slice
-            capacity_next_state_matrix = np.maximum(0, active_capacity_states_arr.reshape(1, -1) - cap_reduction)
-            transition_probs_jt_active = current_t_probs_j.reshape(-1, 1) * active_state_probs_arr.reshape(1, -1)
-            for j_idx in range(J):
-                for active_idx in range(active_capacity_states_arr.shape[0]):
-                    if transition_probs_jt_active[j_idx, active_idx] > epsilon_prob:
-                        next_cap = int(capacity_next_state_matrix[j_idx, active_idx])
-                        prob_to_add = transition_probs_jt_active[j_idx, active_idx]
-                        mu_next_t[next_cap] += prob_to_add
-            mu_table[t + 1] = mu_next_t
+            
+            # Probabilities of these active capacity states
+            active_state_probs_arr = mu_current_t_probs[active_capacity_values] # Shape: (num_active_caps,)
+
+            # Part 1: Transitions if no (actual) product request arrives.
+            # This handles the probability mass if sum of p_jt < 1 (i.e. no dummy "no-op" product).
+            # If a dummy product is included in J and probs_jt such that sum(p_jt)=1, this part might be redundant.
+            current_t_arrival_probs_j = probs_jt[:, t] # Arrival probs for products at time t. Shape: (J,)
+            prob_sum_actual_requests_at_t = np.sum(current_t_arrival_probs_j)
+            prob_no_request_transition = max(0.0, 1.0 - prob_sum_actual_requests_at_t) 
+
+            if prob_no_request_transition > epsilon_prob:
+                # If no request, capacity remains unchanged.
+                # Add P(active_cap) * P(no_request) to mu_next_t_probs[active_cap]
+                np.add.at(mu_next_t_probs, 
+                          active_capacity_values, # Target capacity states (indices for mu_next_t_probs)
+                          active_state_probs_arr * prob_no_request_transition) # Probabilities to add
+
+            # Part 2: Transitions if an (actual) product j requests
+            # y_star shape is (J, C_i+1, T)
+            # y_star_slice_t_active_caps[j, k] is optimal decision for product j if current capacity is active_capacity_values[k] at time t
+            y_star_slice_t_active_caps = y_star[:, active_capacity_values, t] # Shape: (J, num_active_caps)
+
+            # cap_reduction_matrix[j, k]: capacity reduction for product j if current capacity is active_capacity_values[k]
+            cap_reduction_matrix = A_leg_consumption_j_bc * y_star_slice_t_active_caps # Shape: (J, num_active_caps)
+
+            # active_capacity_values_bc is (1, num_active_caps)
+            active_capacity_values_bc = active_capacity_values.reshape(1, -1) 
+            # capacity_next_state_matrix[j, k]: next capacity if product j arrives and current capacity is active_capacity_values[k]
+            capacity_next_state_matrix = np.maximum(0, active_capacity_values_bc - cap_reduction_matrix) # Shape: (J, num_active_caps)
+
+            # transition_probs_matrix[j, k]: P(product j arrives AND current capacity is active_capacity_values[k])
+            #   = P(product j arrives at t) * P(current capacity is active_capacity_values[k] at t)
+            current_t_arrival_probs_j_bc = current_t_arrival_probs_j.reshape(-1, 1) # Shape: (J, 1)
+            active_state_probs_arr_bc = active_state_probs_arr.reshape(1, -1) # Shape: (1, num_active_caps)
+            
+            transition_probs_matrix = current_t_arrival_probs_j_bc * active_state_probs_arr_bc # Shape: (J, num_active_caps)
+
+            # Flatten matrices for np.add.at
+            # target_next_capacity_states_flat are the capacity states in mu_next_t_probs to update
+            target_next_capacity_states_flat = capacity_next_state_matrix.ravel().astype(int)
+            # probability_mass_to_add_flat are the corresponding probability masses
+            probability_mass_to_add_flat = transition_probs_matrix.ravel()
+
+            # Filter out transitions with negligible probability
+            significant_transitions_mask = probability_mass_to_add_flat > epsilon_prob
+            if np.any(significant_transitions_mask):
+                filtered_target_next_caps = target_next_capacity_states_flat[significant_transitions_mask]
+                filtered_prob_mass_to_add = probability_mass_to_add_flat[significant_transitions_mask]
+                
+                np.add.at(mu_next_t_probs, 
+                          filtered_target_next_caps,
+                          filtered_prob_mass_to_add)
+            
+            mu_table[t + 1, :] = mu_next_t_probs
+            
         return mu_table
 
     def compute_vartheta_subgradient(self, leg_idx: int, mu: np.ndarray, y_star: np.ndarray) -> np.ndarray:

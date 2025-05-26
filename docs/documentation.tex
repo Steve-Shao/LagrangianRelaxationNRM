@@ -300,8 +300,77 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
     Specifically, the term $\vartheta^{\lambda^{*}}_{i,t+1}(x_{it}) - \vartheta^{\lambda^{*}}_{i,t+1}(x_{it} - 1)$ represents the bid price of resource $i$ at time $t$.
 \end{itemize}
 
+\vspace{0.5cm}
+
+
+
+% ------------------------------------------------------------------------------------------------
+% SECTION
+% ------------------------------------------------------------------------------------------------
+
+{\color{blue}
+
+\section{The subgradient of $V_1^\lambda(\mathbf{c}_1)$}
+
+\noindent
+Computing the subgradient is important for updating $\lambda_{ijt}$ when minimizing $V^{\lambda}_{1}(c_{1})$.
+However, \cite{topaloglu2009using} does not explicitly provide the subgradient of $V^{\lambda}_{1}(c_{1})$.
+In this section, we show how to compute the subgradient of $V^{\lambda}_{1}(c_{1})$ with respect to a specific Lagrange multiplier $\lambda_{ijt}$.
 
 \vspace{0.5cm}
+
+\noindent
+\textbf{Single-Resource Value Function and Optimal Policy:}
+Recall that the value function $\vartheta^\lambda_{it}(x_{it})$ for resource $i$ with capacity $x_{it}$ at time $t$ is given by the Bellman equation:
+\begin{align*}
+\vartheta^\lambda_{it}(x_{it}) = \max_{y_{ijt} \in \{0,1\}} \left\{ \sum_{j \in \mathcal{J}} p_{jt} \left[ \lambda_{ijt} y_{ijt} + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y_{ijt}) \right] \right\}
+\end{align*}
+Let $y^{*\lambda}_{ijt}(x_{it})$ be the optimal decision for product $j$ given capacity $x_{it}$. Then,
+\begin{align*}
+\vartheta^\lambda_{it}(x_{it}) = \sum_{j \in \mathcal{J}} p_{jt} \left[ \lambda_{ijt} y^{*\lambda}_{ijt}(x_{it}) + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y^{*\lambda}_{ijt}(x_{it})) \right]
+\end{align*}
+with terminal condition $\vartheta^\lambda_{i, \tau+1}(\cdot) = 0$.
+Thus, the value function $\vartheta^\lambda_{i1}(c_i)$ can be written as the expected sum of $\lambda$-weighted accepted products:
+\begin{align*}
+\vartheta^\lambda_{i1}(c_i) = \mathbb{E} \left[ \sum_{t'=1}^{\tau} \sum_{j \in \mathcal{J}} p_{jt'} \lambda_{ijt'} y^{*\lambda}_{ijt'}(X_{it'}) \mid X_{i1} = c_i \right]
+\end{align*}
+where $X_{it'}$ is the random capacity at time $t'$.
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{Capacity State Probability $\mu_{it}(x)$:}
+To see the effect of $\lambda_{ijt}$ on $\vartheta^\lambda_{i1}(c_i)$, define $\mu_{it}(x)$ as the probability that resource $i$ has capacity $x$ at time $t$, starting from $c_i$ at $t=1$ and following the optimal policy $y^{*\lambda}$. This probability mass function is computed recursively:
+\begin{itemize}
+    \item \textbf{Base case ($t=1$):} $\mu_{i1}(x) = \mathbb{I}\{x = c_i\}$.
+    \item \textbf{Recursive step (for $s=1, \ldots, \tau-1$):}
+    \begin{align*}
+    \mu_{i,s+1}(x') = \sum_{x=0}^{c_{i}} \mu_{is}(x) \sum_{j \in \mathcal{J}} p_{js} \mathbb{I}\left\{x' = x - a_{ij}y^{*\lambda}_{ijs}(x)\right\}
+    \end{align*}
+\end{itemize}
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{The subgradient of $\vartheta^\lambda_{i1}(c_i)$ with respect to $\lambda_{ijt}$:}
+As we can see, the change in $\vartheta^\lambda_{i1}(c_i)$ due to $\lambda_{ijt}$ is the sum of local effects at time $t$, weighted by the probability $\mu_{it}(x_{it})$ of being in state $x_{it}$:
+\begin{align*}
+\frac{\partial \vartheta^\lambda_{i1}(c_i)}{\partial \lambda_{ijt}} = \sum_{x_{it}=0}^{c_{i}} \mu_{it}(x_{it}) \left( p_{jt} y^{*\lambda}_{ijt}(x_{it}) \right) = p_{jt} \sum_{x_{it}=0}^{c_{i}} \mu_{it}(x_{it}) y^{*\lambda}_{ijt}(x_{it})
+\end{align*}
+Intuitively, the sum $\sum_{x_{it}=0}^{c_{i}} \mu_{it}(x_{it}) y^{*\lambda}_{ijt}(x_{it})$ is the expected optimal decision for product $j$ at time $t$, given initial capacity $c_i$.
+
+\vspace{0.5cm}
+
+\noindent
+\textbf{The subgradient of $V^{\lambda}_{1}(c_{1})$ with respect to $\lambda_{ijt}$:}
+Using \eqref{eq:lagrangian_relaxation_algorithm}, we have: 
+\begin{align*}
+    \frac{\partial V^{\lambda}_{1}(c_{1})}{\partial \lambda_{ijt}} 
+    &= \frac{\partial \vartheta^\lambda_{i1}(c_{i})}{\partial \lambda_{ijt}} 
+    - p_{jt} \,\mathbf{1}\left\{f_j - \sum_{k \in \mathcal{L}} \lambda_{kjt} \ge 0\right\} 
+\end{align*}
+
+}%
 
 
 
@@ -319,7 +388,6 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 
 
 % ------------------------------------------------------------------------------------------------
-
 \subsection{Subroutine: Solving the Single-Resource Dynamic Program}
 
 \noindent
@@ -327,6 +395,7 @@ We solve the single-resource optimality equation using tabular backward inductio
 
 \begin{algorithm}[H]
 \caption{Subroutine: Tabular Backward Induction for Single-Resource Dynamic Program}
+\label{alg:solve_sdp}
 \begin{algorithmic}[1]
 \Require Resource $i$, capacities $\mathcal{C}$, time periods $\mathcal{T}$, probabilities $p_{jt}$, consumption $a_{ij}$, multipliers $\lambda_{ijt}$
 \Ensure Value functions $\vartheta^\lambda_{it}(x_{it})$ and optimal decisions $y^*_{ijt}(x_{it})$
@@ -353,69 +422,42 @@ We solve the single-resource optimality equation using tabular backward inductio
 
 \vspace{0.5cm}
 
-{\color{blue}
 
 
 % ------------------------------------------------------------------------------------------------
-
-\subsection{Subroutine: Computing the Subgradient of $\vartheta^\lambda_{it}(x_{it})$}
-\label{subroutine:computing_subgradient}
+\subsection{Subroutine: Computing State Probabilities}
 
 \noindent
-Consider any resource $i$. 
-Note that: 
-\begin{align*}
-    \vartheta^\lambda_{it}(x_{it}) 
-    &= \max_{y_{it} \in \mathcal{Y}_{it}(x_{it})} 
-    \left\{ 
-        \sum_{j \in \mathcal{J}} p_{jt} 
-        \left[ 
-            \lambda_{ijt} y_{ijt} 
-            + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y_{ijt}) 
-        \right] 
-    \right\} \\
-    &= \sum_{j \in \mathcal{J}} p_{jt} 
-        \left[ 
-            \lambda_{ijt} y^{*\lambda}_{ijt} 
-            + \vartheta^\lambda_{i, t+1}(x_{it} - a_{ij} y^{*\lambda}_{ijt}) 
-        \right] . 
-\end{align*}
-Let \( \mu_{it}(x_{it}) \) be the probability mass function of the capacity of resource $i$ at time $t$. 
-It is given by:
-\begin{align*}
-    \mu_{i,t+1}(x') &= \sum_{x} \mu_{it}(x) \sum_{j \in \mathcal{J}} p_{jt} \mathbb{I}\left\{x' = x - a_{ij}y_{ijt}^*(x)\right\} .
-\end{align*}
-To compute the subgradient of $\vartheta^\lambda_{i1}(c_{i})$ with respect to $\lambda_{ijt}$, let
-\begin{align*}
-    \mu_{i1}(x) &= 
-        \begin{cases}
-        1 & \text{if } x = c_i, \\
-        0 & \text{otherwise.}
-        \end{cases}
-\end{align*}
-Then, we have:
-\begin{align*}
-    \frac{\partial \vartheta^\lambda_{i1}(c_{i})}{\partial \lambda_{ijt}} 
-    &= \sum_{x} \mu_{it}(x) y^{*\lambda}_{ijt}(x) 
-\end{align*}
+This subroutine is executed for each resource $i \in \mathcal{L}$. 
+It computes the state occupancy probabilities $\mu_{is}(x)$ for resource $i$ at each time $s \in \mathcal{T}$ and capacity level $x \in \mathcal{C}$. 
+These probabilities indicate the likelihood of resource $i$ having $x$ units of capacity at the beginning of period $s$, given an initial capacity $c_{i,1}$ at $s=1$ and following the optimal single-resource policies $y^{*\lambda}_{ijs}(x)$ derived from Algorithm~\ref{alg:solve_sdp}.
 
 \begin{algorithm}[H]
-\caption{Forward Pass for Computing $\mu_{it}(x_{it})$}
+\caption{Compute State Probabilities $\mu_{is}(x)$ for Resource $i$}
+\label{alg:compute_mu}
 \begin{algorithmic}[1]
-    \State \textbf{Initialize:} $\mu_{i1}(x) \gets 1$ if $x = c_i$, else $0$ \Comment{$x \in \mathcal{C} = \{0, 1, \ldots, C\}$}
-    \For{$t = 1$ to $\tau-1$}
-        \For{each $x'$ in $\mathcal{C}$} \Comment{$x' \in \mathcal{C} = \{0, 1, \ldots, C\}$}
-            \State $\mu_{i, t+1}(x') \gets 0$
-        \EndFor
-        \For{each $x$ in $\mathcal{C}$} \Comment{$x \in \mathcal{C} = \{0, 1, \ldots, C\}$}
-            \For{each $j \in \mathcal{J}$}
-                \State $x' \gets x - a_{ij} y_{ijt}^*(x)$
-                \If{$x'$ is a valid capacity} \Comment{$x' \in \mathcal{C}$}
-                    \State $\mu_{i, t+1}(x') \gets \mu_{i, t+1}(x') + \mu_{it}(x) \cdot p_{jt}$
+\Require Resource $i$, initial capacity $c_{i,1}$, maximum capacity $C$, time periods $\mathcal{T}$, product set $\mathcal{J}$, arrival probabilities $p_{js}$, consumption $a_{ij}$, optimal policies $y^{*\lambda}_{ijs}(x)$
+\Ensure State probabilities $\mu_{is}(x)$ for $s \in \mathcal{T}, x \in \{0, \ldots, C\}$
+
+\State Initialize array $\mu_{i \cdot (\cdot)} : (\mathcal{T} \times \mathcal{C}) \to \R$ with all entries $0.0$.
+\State $\mu_{i1}(c_{i,1}) \gets 1.0$ \Comment{At $s=1$, capacity is $c_{i,1}$ with prob. 1}
+
+\For{$s = 1$ \textbf{to} $\tau-1$} \Comment{Forward in time}
+    \For{$x_{curr} = 0$ \textbf{to} $C$} \Comment{For each capacity at $s$}
+        \If{$\mu_{is}(x_{curr}) > 10^{-9}$} \Comment{If $x_{curr}$ is reachable}
+            \For{$j \in \mathcal{J}$} \Comment{For each product $j$}
+                \State $y^*_{curr} \gets y^{*\lambda}_{i,j,s}(x_{curr})$ \Comment{Optimal decision at $(i,s,x_{curr})$}
+                \State $x_{next} \gets x_{curr} - a_{i,j} \cdot y^*_{curr}$
+                \If{$x_{next} < 0$} \Comment{Negative capacity should not actually occur!}
+                    \State $x_{next} \gets 0$ 
                 \EndIf
+                \State $\mu_{i,s+1}(x_{next}) \gets \mu_{i,s+1}(x_{next}) + \mu_{is}(x_{curr}) \cdot p_{j,s}$
             \EndFor
-        \EndFor
+        \EndIf
     \EndFor
+\EndFor
+
+\State \Return $\mu$ array (containing $\mu_{is}(x)$)
 \end{algorithmic}
 \end{algorithm}
 
@@ -424,32 +466,42 @@ Then, we have:
 
 
 % ------------------------------------------------------------------------------------------------
-
-\subsection{Subgradient Optimization: Alternative 1}
-
-% \noindent
-% After solving the single-resource dynamic programs, we obtain the optimal decisions $y^{*\lambda}_{ijt}(x_{it})$ for all physical resources $i \in \mathcal{L}$. For the fictitious resource $\phi$, the optimal decision is:
-
-% $$y^{*\lambda}_{\phi jt} = 
-% \begin{cases} 
-% 1 & \text{if } f_j - \sum_{i \in \mathcal{L}} \lambda_{ijt} \ge 0 \\
-% 0 & \text{otherwise}
-% \end{cases}$$
-
-% \noindent
-% The complete optimal solution to the Lagrangian Relaxation is therefore:
-% \begin{itemize}[itemsep=0pt,parsep=0pt]
-% \item[-] $y^{*\lambda}_{ijt}(x_{it})$ for all $i \in \mathcal{L}$, $j \in \mathcal{J}$, $t \in \mathcal{T}$, $x_{it} \in \mathcal{C}$ (from backward induction)
-% \item[-] $y^{*\lambda}_{\phi jt}$ for all $j \in \mathcal{J}$, $t \in \mathcal{T}$ (as defined above)
-% \end{itemize}
+\subsection{Subroutine: Computing $\vartheta$-Subgradient}
 
 \noindent
-Using \eqref{eq:lagrangian_relaxation_algorithm} and Subsection \ref{subroutine:computing_subgradient}, we have: 
-\begin{align*}
-    \frac{\partial V^{\lambda}_{1}(c_{1})}{\partial \lambda_{ijt}} 
-    &= \frac{\partial \vartheta^\lambda_{i1}(c_{i})}{\partial \lambda_{ijt}} 
-    - p_{jt} \,\mathbf{1}\left\{f_j - \sum_{k \in \mathcal{L}} \lambda_{kjt} \ge 0\right\} 
-\end{align*}
+This subroutine uses the state probabilities and the optimal policies to calculate the subgradient of the single-resource total expected $\lambda$-weighted value $\vartheta^\lambda_{i1}(c_{i,1})$ with respect to each relevant Lagrange multiplier $\lambda_{ijs}$.
+
+\begin{algorithm}[H]
+\caption{Compute $\vartheta$-Subgradient $G_{ijs}$ for Resource $i$}
+\label{alg:compute_subgrad_vartheta}
+\begin{algorithmic}[1]
+\Require State probabilities $\mu_{is}(x)$, optimal policies $y^{*\lambda}_{ijs}(x)$, arrival probabilities $p_{js}$, product set $\mathcal{J}$, time periods $\mathcal{T}$, maximum capacity $C$
+\Ensure Subgradients $G_{ijs} = \frac{\partial \vartheta^\lambda_{i1}(c_{i,1})}{\partial \lambda_{ijs}}$ for $j \in \mathcal{J}, s \in \mathcal{T}$
+
+\State Initialize array $G_{i \cdot \cdot} : (\mathcal{J} \times \mathcal{T}) \to \R$ with all entries set to $0.0$.
+
+\For{$s = 1$ \textbf{to} $\tau$} \Comment{For each time period $s$}
+    \For{$j \in \mathcal{J}$} \Comment{For each product $j$}
+        \State $\text{expected\_y\_star}_{ijs} \gets 0$
+        \For{$x = 0$ \textbf{to} $C$} \Comment{For each capacity level $x$ at time $s$}
+            \If{$\mu_{is}(x) > 10^{-9}$} \Comment{If state $(i,s,x)$ is reachable}
+                \State $\text{expected\_y\_star}_{ijs} \gets \text{expected\_y\_star}_{ijs} + \mu_{is}(x) \cdot y^{*\lambda}_{i,j,s}(x)$
+            \EndIf
+        \EndFor
+        \State $G_{i,j,s} \gets p_{j,s} \cdot \text{expected\_y\_star}_{ijs}$
+    \EndFor
+\EndFor
+
+\State \Return $G$ array (containing $G_{ijs}$)
+\end{algorithmic}
+\end{algorithm}
+
+
+% ------------------------------------------------------------------------------------------------
+
+\subsection{Final Subgradient Optimization}
+
+\noindent
 Note that as a Lagrangian multiplier, $\lambda_{ijt} \ge 0$. 
 Thus, here we use a projected subgradient descent algorithm to optimize $\lambda$.
 \begin{algorithm}[H]
@@ -474,45 +526,88 @@ Thus, here we use a projected subgradient descent algorithm to optimize $\lambda
 \end{algorithmic}
 \end{algorithm}
 
-
-}%
-
 \vspace{0.5cm}
+
 
 
 
 % ------------------------------------------------------------------------------------------------
-
-\subsection{Subgradient Optimization: Alternative 2}
+\subsection{Algorithm: Computing Total Expected Revenue using Bid Prices}
 
 \noindent
-Without computing subgradient analytically, we can use the following algorithm to optimize $\lambda$: 
-
-\begin{algorithm}[H]
-\caption{Subgradient Optimization for Lagrangian Relaxation}
-\begin{algorithmic}[1]
-\Require Initial multiplier $\lambda^0$, initial step size $\alpha_0$, tolerance $\epsilon$, max iterations $K$
-\Ensure Optimal multiplier $\lambda^*$
-\State $k \gets 0$
-\State $V_{\text{prev}} \gets \infty$
-\While{$k < K$}
-    \State Compute $V^{\lambda^k}_{1}(c_{1})$ \Comment{Evaluate current objective}
-    \If{$|V^{\lambda^k}_{1}(c_{1}) - V_{\text{prev}}| < \epsilon$}
-        \State \textbf{break} \Comment{Convergence achieved}
-    \EndIf
-    \State $V_{\text{prev}} \gets V^{\lambda^k}_{1}(c_{1})$
-    \State Generate random unit vector $d$
-    \State Compute $V^{\lambda^k + \delta d}_{1}(c_{1})$ \Comment{Perturbed objective}
-    \State $g^k \gets \frac{V^{\lambda^k + \delta d}_{1}(c_{1}) - V^{\lambda^k}_{1}(c_{1})}{\delta} \cdot d$ \Comment{Approximate subgradient}
-    \State $\alpha_k \gets \frac{\alpha_0}{\sqrt{k+1}}$ \Comment{Update step size}
-    \State $\lambda^{k+1} \gets \max\{0, \lambda^k - \alpha_k g^k\}$ \Comment{Component-wise projection onto $\Lambda = \{\lambda \geq 0\}$}
-    \State $k \gets k + 1$
-\EndWhile
-\State \Return $\lambda^k$
-\end{algorithmic}
-\end{algorithm}
+Once the optimal Lagrangian multipliers $\lambda^*$ are obtained (e.g., using Algorithm 4), the control policy based on bid prices can be defined. To evaluate the performance of this policy, we can estimate the total expected revenue by simulating customer arrivals and decisions over the time horizon. The following algorithm describes this Monte Carlo simulation process.
 
 \vspace{0.5cm}
+
+\noindent
+\textbf{Note:} Due to the curse of dimensionality, the exact dynamic programming approach is computationally feasible only for small networks. For larger instances, Monte Carlo simulation can approximate the expected revenue by sampling customer arrivals and applying the bid price policy iteratively.
+
+\vspace{0.5cm}
+
+\begin{algorithm}[H]
+\caption{Estimate Total Expected Revenue using Bid Price Policy (Monte Carlo Simulation)}
+\label{alg:monte_carlo_revenue}
+\begin{algorithmic}[1]
+\Input
+    \State Optimized Lagrangian multipliers $\lambda^*$ (from Algorithm 4)
+    \State Initial capacities $c = (c_1, \ldots, c_{|\mathcal{L}|})$ for resources $i \in \mathcal{L}$
+    \State Set of products $\mathcal{J}$ (assumed to include a dummy product $\psi$ with $f_\psi=0, a_{i\psi}=0$)
+    \State Product revenues $f_j$ for $j \in \mathcal{J}$
+    \State Resource consumption $a_{ij}$ for $i \in \mathcal{L}, j \in \mathcal{J}$
+    \State Arrival probabilities $p_{jt}$ for $j \in \mathcal{J}, t \in \mathcal{T}$ (with $\sum_{j \in \mathcal{J}} p_{jt} = 1$ for each $t$)
+    \State Time horizon $\mathcal{T} = \{1, \ldots, \tau\}$
+    \State Maximum capacity $C$ for any resource (needed for $\vartheta$ table dimensions)
+    \State Number of simulation runs $N_{sim}$
+\Output
+    \State Estimated total expected revenue $E[R]$
+
+\Statex
+\State \textbf{Phase 1: Pre-computation}
+\State Compute value functions $\vartheta^{\lambda^*}_{i,t'}(x)$ for all $i \in \mathcal{L}$, $t' \in \{1, \ldots, \tau+1\}$, and $x \in \{0, \ldots, C\}$ using Algorithm~\ref{alg:solve_sdp} with the input $\lambda^*$.
+\Statex \Comment{Recall that $\vartheta^{\lambda^*}_{i,\tau+1}(x) = 0$ for all $x$ is the terminal condition for Algorithm~\ref{alg:solve_sdp}.}
+
+\Statex
+\State \textbf{Phase 2: Monte Carlo Simulation}
+\State Initialize $TotalSimulatedRevenue \gets 0.0$
+
+\For{$s = 1$ \textbf{to} $N_{sim}$} \Comment{Iterate over simulation runs}
+    \State $CurrentRunRevenue \gets 0.0$
+    \State $current\_capacities \gets \text{copy of } c$ \Comment{Initialize resource capacities for this run, array indexed by $i$}
+    \For{$t = 1$ \textbf{to} $\tau$} \Comment{Iterate over time periods}
+        \State Sample a product $j_{req} \in \mathcal{J}$ based on the probability distribution $\{p_{jt}\}_{j \in \mathcal{J}}$ for period $t$.
+        
+        \If{$f_{j_{req}} > 0$} \Comment{Process actual products; dummy product $\psi$ has $f_\psi=0$}
+            \State $OpportunityCost \gets 0.0$
+            \State $SufficientCapacity \gets \text{true}$
+            
+            \Comment{Check capacity and calculate total opportunity cost for product $j_{req}$}
+            \For{$i \in \mathcal{L}$ such that $a_{ij_{req}} > 0$} \Comment{For each resource $i$ consumed by $j_{req}$}
+                \If{$current\_capacities[i] < a_{ij_{req}}$}
+                    \State $SufficientCapacity \gets \text{false}$
+                    \State \textbf{break} \Comment{Out of loop checking resources for $j_{req}$; insufficient capacity for resource $i$}
+                \EndIf
+                \For{$r = 1$ \textbf{to} $a_{ij_{req}}$} \Comment{Sum bid prices for each unit of resource $i$ consumed}
+                    \State $\text{bid\_price\_unit} \gets \vartheta^{\lambda^*}_{i,t+1}(current\_capacities[i] - r + 1) - \vartheta^{\lambda^*}_{i,t+1}(current\_capacities[i] - r)$
+                    \State $OpportunityCost \gets OpportunityCost + \text{bid\_price\_unit}$
+                \EndFor
+            \EndFor
+            
+            \If{$SufficientCapacity \text{ and } f_{j_{req}} \ge OpportunityCost$} \Comment{Acceptance decision}
+                \State $CurrentRunRevenue \gets CurrentRunRevenue + f_{j_{req}}$
+                \For{$i \in \mathcal{L}$ such that $a_{ij_{req}} > 0$} \Comment{Update capacities}
+                    \State $current\_capacities[i] \gets current\_capacities[i] - a_{ij_{req}}$
+                \EndFor
+            \EndIf
+        \EndIf
+        \Comment{Capacities in $current\_capacities$ are now updated for the start of the next period $t+1$}
+    \EndFor \Comment{End of time horizon for one simulation run}
+    \State $TotalSimulatedRevenue \gets TotalSimulatedRevenue + CurrentRunRevenue$
+\EndFor \Comment{End of all simulation runs}
+
+\State $E[R] \gets TotalSimulatedRevenue / N_{sim}$
+\State \Return $E[R]$
+\end{algorithmic}
+\end{algorithm}
 
 
 

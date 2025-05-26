@@ -11,17 +11,24 @@
 \citation{topaloglu2009using}
 \citation{topaloglu2009using}
 \newlabel{eq:lagrangian_relaxation_algorithm}{{1}{3}{The LR Algorithm}{equation.3.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Implementation}{4}{section.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Subroutine: Solving the Single-Resource Dynamic Program}{4}{subsection.4.1}\protected@file@percent }
-\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Subroutine: Tabular Backward Induction for Single-Resource Dynamic Program}}{4}{algorithm.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Subroutine: Computing the Subgradient of $\vartheta ^\lambda _{it}(x_{it})$}{4}{subsection.4.2}\protected@file@percent }
-\newlabel{subroutine:computing_subgradient}{{4.2}{4}{Subroutine: Computing the Subgradient of $\vartheta ^\lambda _{it}(x_{it})$}{subsection.4.2}{}}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Forward Pass for Computing $\mu _{it}(x_{it})$}}{5}{algorithm.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Subgradient Optimization: Alternative 1}{5}{subsection.4.3}\protected@file@percent }
+\citation{topaloglu2009using}
+\@writefile{toc}{\contentsline {section}{\numberline {4}The subgradient of $V_1^\lambda (\mathbf  {c}_1)$}{4}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Implementation}{5}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Subroutine: Solving the Single-Resource Dynamic Program}{5}{subsection.5.1}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Subroutine: Tabular Backward Induction for Single-Resource Dynamic Program}}{5}{algorithm.1}\protected@file@percent }
+\newlabel{alg:solve_sdp}{{1}{5}{Subroutine: Solving the Single-Resource Dynamic Program}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Subroutine: Computing State Probabilities}{5}{subsection.5.2}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Compute State Probabilities $\mu _{is}(x)$ for Resource $i$}}{6}{algorithm.2}\protected@file@percent }
+\newlabel{alg:compute_mu}{{2}{6}{Subroutine: Computing State Probabilities}{algorithm.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Subroutine: Computing $\vartheta $-Subgradient}{6}{subsection.5.3}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {3}{\ignorespaces Compute $\vartheta $-Subgradient $G_{ijs}$ for Resource $i$}}{6}{algorithm.3}\protected@file@percent }
+\newlabel{alg:compute_subgrad_vartheta}{{3}{6}{Subroutine: Computing $\vartheta $-Subgradient}{algorithm.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Final Subgradient Optimization}{7}{subsection.5.4}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {4}{\ignorespaces Projected Subgradient Descent for Lagrangian Multiplier Optimization}}{7}{algorithm.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Algorithm: Computing Total Expected Revenue using Bid Prices}{7}{subsection.5.5}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {5}{\ignorespaces Estimate Total Expected Revenue using Bid Price Policy (Monte Carlo Simulation)}}{8}{algorithm.5}\protected@file@percent }
+\newlabel{alg:monte_carlo_revenue}{{5}{8}{Algorithm: Computing Total Expected Revenue using Bid Prices}{algorithm.5}{}}
 \bibstyle{apalike}
 \bibdata{references}
 \bibcite{topaloglu2009using}{Topaloglu, 2009}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {3}{\ignorespaces Projected Subgradient Descent for Lagrangian Multiplier Optimization}}{6}{algorithm.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Subgradient Optimization: Alternative 2}{6}{subsection.4.4}\protected@file@percent }
-\@writefile{loa}{\contentsline {algorithm}{\numberline {4}{\ignorespaces Subgradient Optimization for Lagrangian Relaxation}}{6}{algorithm.4}\protected@file@percent }
-\gdef \@abspage@last{7}
+\gdef \@abspage@last{9}

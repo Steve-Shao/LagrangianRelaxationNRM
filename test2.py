@@ -1,5 +1,6 @@
 import re
 import numpy as np
+import numba # Added numba import
 
 
 class InstanceRM:
@@ -42,6 +43,212 @@ class InstanceRM:
         minimize_lr_relaxation(lmd0=None, alpha0=1.0, eps=1e-5, max_iter=1000, verbose=False, print_every=10): Minimize the Lagrangian relaxation using projected subgradient descent.
         simulate_revenue_with_bid_prices(N_sim: int, optimized_lmd_param: np.ndarray = None) -> float: Estimate total expected revenue using the bid price policy derived from Lagrangian multipliers, via Monte Carlo simulation.
     """
+
+    # Add jitted static helper for solve_single_leg_dp
+    @staticmethod
+    @numba.jit(nopython=True, cache=True)
+    def _jit_solve_single_leg_dp(
+        T_periods: int,
+        J_itineraries: int,
+        leg_capacity: int,
+        leg_consumptions_j: np.ndarray,  # A[leg_idx, :] -> (J,)
+        probs_jt: np.ndarray,          # probabilities.T -> (J, T)
+        leg_lambdas_jt: np.ndarray,     # lmd[leg_idx, :, :] -> (J, T)
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        JIT-compiled core logic for solving single-resource dynamic program.
+        """
+        vartheta_table = np.zeros((leg_capacity + 1, T_periods + 1))  # Value function
+        optimal_decisions_y = np.zeros((J_itineraries, leg_capacity + 1, T_periods), dtype=np.int_) # Optimal decisions
+        capacity_states = np.arange(leg_capacity + 1)  # All possible capacity levels [0,...,leg_capacity]
+
+        # Precompute broadcasted arrays and capacity mask
+        # leg_consumptions_j: (J,), capacity_states: (C+1,)
+        # consumptions_bc: (J, 1), capacity_states_bc: (1, C+1)
+        consumptions_bc = leg_consumptions_j.reshape(-1, 1)
+        capacity_states_bc = capacity_states.reshape(1, -1)
+        
+        # sufficient_capacity_mask: (J, C+1)
+        sufficient_capacity_mask = (consumptions_bc <= capacity_states_bc)
+
+        # Backward induction through time
+        for t in range(T_periods - 1, -1, -1):
+            next_t_value_func = vartheta_table[:, t + 1]  # Next period's value function (C+1,)
+            # current_t_lambdas_j: (J,1) for broadcasting against (C+1) states
+            current_t_lambdas_j = leg_lambdas_jt[:, t].reshape(-1, 1) 
+            
+            # Calculate accept/reject values
+            # capacity_if_accept: (J, C+1)
+            capacity_if_accept = capacity_states_bc - consumptions_bc
+            
+            # future_value_if_accept: (J, C+1)
+            # Initialize with -inf for invalid states (where capacity_if_accept < 0 before clipping)
+            future_value_if_accept = np.full((J_itineraries, leg_capacity + 1), -np.inf)
+            
+            # Valid capacity indices after acceptance (clipped to be >= 0)
+            valid_capacity_indices_if_accept = np.maximum(0, capacity_if_accept)
+
+            # Populate future_value_if_accept only where sufficient_capacity_mask is True
+            for j_idx in range(J_itineraries):
+                for cap_idx in range(leg_capacity + 1):
+                    if sufficient_capacity_mask[j_idx, cap_idx]:
+                        future_value_if_accept[j_idx, cap_idx] = next_t_value_func[valid_capacity_indices_if_accept[j_idx, cap_idx]]
+            
+            val_accept = current_t_lambdas_j + future_value_if_accept  # Value if accept (J, C+1)
+            val_reject = next_t_value_func.reshape(1, -1)  # Value if reject, broadcast to (1, C+1)
+            
+            # Determine optimal decisions (J, C+1)
+            current_t_optimal_decisions = (val_accept > val_reject).astype(np.int_)
+            optimal_decisions_y[:, :, t] = current_t_optimal_decisions
+            
+            # Calculate capacity after optimal decisions (J, C+1)
+            capacity_after_decision = capacity_states_bc - consumptions_bc * current_t_optimal_decisions
+            # Clip to ensure capacity is not negative (though logic should prevent this if y is correct)
+            capacity_after_decision = np.maximum(0, capacity_after_decision) 
+            
+            # Bellman equation update
+            # term_if_accepted_and_optimal: (J, C+1)
+            # (lambda_jt + V(x-a, t+1)) * y_jt
+            term_if_accepted_and_optimal = (current_t_lambdas_j + future_value_if_accept) * current_t_optimal_decisions
+            # term_if_rejected_or_not_optimal: (J, C+1)
+            # V(x, t+1) * (1 - y_jt)
+            term_if_rejected_or_not_optimal = val_reject * (1 - current_t_optimal_decisions)
+
+            # Expected value from decision on product j, given state x
+            # Sum of [ P(j) * ( Value_if_y_star_for_j ) ]
+            # This part was tricky with Numba's direct translation, simplified:
+            # vartheta_table[:, t] is (C+1,)
+            # probs_jt is (J,T)
+            # current_t_optimal_decisions is (J, C+1)
+            # current_t_lambdas_j is (J,1)
+            # next_t_value_func is (C+1,)
+            # capacity_after_decision is (J, C+1)
+            
+            # For each state x (column in vartheta_table):
+            # V(x,t) = sum_j { p_jt * [ y_jxt * (lambda_jt + V(x-a_j, t+1)) + (1-y_jxt) * V(x,t+1) ] }
+            # This is: sum_j { p_jt * ( y_jxt*lambda_jt + V(x - a_j*y_jxt, t+1) ) }
+
+            # Re-evaluate the term inside sum for Bellman update:
+            # For each state x (cap_idx_):
+            #   sum_over_j = 0
+            #   for j_idx_ in range(J_itineraries):
+            #       prob_j_at_t = probs_jt[j_idx_, t]
+            #       decision_y = optimal_decisions_y[j_idx_, cap_idx_, t]
+            #       lambda_val = leg_lambdas_jt[j_idx_, t]
+            #       
+            #       val_from_this_j = 0
+            #       if decision_y == 1: # Accept
+            #           cap_after = capacity_states[cap_idx_] - leg_consumptions_j[j_idx_]
+            #           val_from_this_j = lambda_val + next_t_value_func[max(0, cap_after)]
+            #       else: # Reject
+            #           val_from_this_j = next_t_value_func[capacity_states[cap_idx_]]
+            #       sum_over_j += prob_j_at_t * val_from_this_j
+            #   vartheta_table[cap_idx_, t] = sum_over_j
+            # The original formulation was more vectorized and likely correct, let's stick to it.
+            # Original:
+            # vartheta_table[:, t] = np.sum(
+            #     probs_jt[:, t, None] * (current_t_lambdas_j * optimal_decisions_y[:, :, t] + next_t_value_func[capacity_after_decision]),
+            #     axis=0
+            # )
+            # This requires next_t_value_func[capacity_after_decision] to work with 2D index.
+            # Numba handles advanced indexing: next_t_value_func is 1D, capacity_after_decision is 2D.
+            # The result of next_t_value_func[capacity_after_decision] will be 2D.
+            
+            # Step-by-step for Numba compatibility if direct indexing is an issue (it usually isn't for this simple case)
+            value_at_cap_after_decision = np.zeros_like(capacity_after_decision, dtype=np.float64)
+            for j_ in range(J_itineraries):
+                for c_ in range(leg_capacity + 1):
+                    value_at_cap_after_decision[j_, c_] = next_t_value_func[capacity_after_decision[j_, c_]]
+            
+            sum_val = probs_jt[:, t].reshape(-1,1) * \
+                      (current_t_lambdas_j * optimal_decisions_y[:, :, t] + value_at_cap_after_decision)
+            
+            vartheta_table[:, t] = np.sum(sum_val, axis=0)
+
+        return vartheta_table, optimal_decisions_y
+
+    # Add jitted static helper for compute_state_probabilities
+    @staticmethod
+    @numba.jit(nopython=True, cache=True)
+    def _jit_compute_state_probabilities(
+        T_periods: int,
+        J_itineraries: int,
+        leg_capacity: int,
+        probs_jt: np.ndarray,           # self.probabilities.T (J, T)
+        A_leg_consumption_j: np.ndarray,# self.A[leg_idx, :] (J,)
+        y_star: np.ndarray,             # (J, C_i+1, T)
+        epsilon_prob: float = 1e-9      # Epsilon for probability checks
+    ) -> np.ndarray:
+        """
+        JIT-compiled core logic for computing state occupancy probabilities.
+        """
+        mu_table = np.zeros((T_periods, leg_capacity + 1))
+        if leg_capacity < 0: # Should not happen
+            return mu_table 
+            
+        mu_table[0, leg_capacity] = 1.0  # Initial state at t=0: full capacity
+        
+        capacity_states = np.arange(leg_capacity + 1) # (C+1,)
+        # A_leg_consumption_j needs to be (J,1) for broadcasting
+        A_leg_consumption_j_bc = A_leg_consumption_j.reshape(-1, 1)
+
+
+        for t in range(T_periods - 1):
+            mu_next_t = np.zeros(leg_capacity + 1) # Probabilities for t+1
+            
+            active_capacity_indices = np.where(mu_table[t] > epsilon_prob)[0]
+            
+            if active_capacity_indices.shape[0] == 0: # No active states
+                mu_table[t+1] = mu_next_t
+                continue
+
+            active_capacity_states_arr = capacity_states[active_capacity_indices] # (num_active,)
+            active_state_probs_arr = mu_table[t, active_capacity_indices]     # (num_active,)
+            
+            # Handle no-request case
+            current_t_probs_j = probs_jt[:, t] # (J,)
+            prob_sum_requests_at_t = 0.0
+            for j_idx in range(J_itineraries):
+                prob_sum_requests_at_t += current_t_probs_j[j_idx]
+            prob_no_request = max(0.0, 1.0 - prob_sum_requests_at_t)
+
+            if prob_no_request > epsilon_prob:
+                for i in range(active_capacity_states_arr.shape[0]):
+                    cap_state = active_capacity_states_arr[i]
+                    prob_mass = active_state_probs_arr[i]
+                    mu_next_t[cap_state] += prob_mass * prob_no_request
+            
+            # Handle product requests
+            # y_star_slice: decisions for active capacity states at time t (J, num_active_states)
+            # y_star is (J, C+1, T)
+            y_star_slice = y_star[:, active_capacity_indices, t] # (J, num_active)
+            
+            # capacity_next_state: capacity if product j is accepted, for active states (J, num_active_states)
+            # active_capacity_states_arr broadcasted to (1, num_active)
+            # A_leg_consumption_j_bc is (J,1)
+            # y_star_slice is (J, num_active)
+            cap_reduction = A_leg_consumption_j_bc * y_star_slice # (J, num_active)
+            capacity_next_state_matrix = np.maximum(0, active_capacity_states_arr.reshape(1,-1) - cap_reduction) # (J, num_active)
+
+            # transition_probs_jt_active: prob of transitioning from an active state due to request for j (J, num_active_states)
+            # current_t_probs_j broadcasted (J,1) * active_state_probs_arr broadcasted (1, num_active)
+            transition_probs_jt_active = current_t_probs_j.reshape(-1,1) * active_state_probs_arr.reshape(1,-1) # (J, num_active)
+            
+            for j_idx in range(J_itineraries):
+                for active_idx in range(active_capacity_states_arr.shape[0]):
+                    if transition_probs_jt_active[j_idx, active_idx] > epsilon_prob:
+                        next_cap = capacity_next_state_matrix[j_idx, active_idx]
+                        prob_to_add = transition_probs_jt_active[j_idx, active_idx]
+                        mu_next_t[next_cap] += prob_to_add
+            
+            mu_table[t+1] = mu_next_t
+            # Normalize if necessary (should sum to 1 ideally if probs sum to 1)
+            # sum_mu_next_t = np.sum(mu_next_t)
+            # if sum_mu_next_t > epsilon_prob:
+            #    mu_table[t+1] /= sum_mu_next_t
+            # For numerical stability, often let it be rather than re-normalizing if theory implies sum=1.
+
+        return mu_table
 
     def __init__(self, filepath: str):
         """
@@ -211,101 +418,39 @@ class InstanceRM:
     def solve_single_leg_dp(self, leg_idx: int) -> tuple[np.ndarray, np.ndarray]:
         """
         Solve the single-resource dynamic program for a flight leg using backward induction.
-        Pure numpy implementation (no numba).
-        Returns:
-            tuple: (vartheta_table, y_star)
-                vartheta_table: (C+1, T+1)
-                y_star: (J, C+1, T)
+        This method now calls a JIT-compiled helper function.
         """
         leg_capacity = self.C[leg_idx]
-        J = self.J
-        T = self.T
         leg_consumptions_j = self.A[leg_idx, :]  # (J,)
-        probs_jt = self.probabilities.T  # (J, T)
-        leg_lambdas_jt = self.lmd[leg_idx, :, :]  # (J, T)
+        # Ensure probs_jt and leg_lambdas_jt are C-contiguous for Numba if they come from slices
+        # .T creates a view with Fortran order. Numba prefers C order for some ops or will make a copy.
+        # Using .copy() can ensure C-order if performance issues arise, but often Numba handles it.
+        probs_jt = np.ascontiguousarray(self.probabilities.T) # (J, T)
+        leg_lambdas_jt = np.ascontiguousarray(self.lmd[leg_idx, :, :]) # (J, T)
 
-        vartheta_table = np.zeros((leg_capacity + 1, T + 1))
-        y_star = np.zeros((J, leg_capacity + 1, T), dtype=int)
-        capacity_states = np.arange(leg_capacity + 1)
-
-        consumptions_bc = leg_consumptions_j.reshape(-1, 1)
-        capacity_states_bc = capacity_states.reshape(1, -1)
-        sufficient_capacity_mask = (consumptions_bc <= capacity_states_bc)
-
-        for t in range(T - 1, -1, -1):
-            next_t_value_func = vartheta_table[:, t + 1]
-            current_t_lambdas_j = leg_lambdas_jt[:, t].reshape(-1, 1)
-            capacity_if_accept = capacity_states_bc - consumptions_bc
-            valid_capacity_indices_if_accept = np.maximum(0, capacity_if_accept)
-            future_value_if_accept = np.full((J, leg_capacity + 1), -np.inf)
-            for j_idx in range(J):
-                for cap_idx in range(leg_capacity + 1):
-                    if sufficient_capacity_mask[j_idx, cap_idx]:
-                        future_value_if_accept[j_idx, cap_idx] = next_t_value_func[valid_capacity_indices_if_accept[j_idx, cap_idx]]
-            val_accept = current_t_lambdas_j + future_value_if_accept
-            val_reject = next_t_value_func.reshape(1, -1)
-            current_t_optimal_decisions = (val_accept > val_reject).astype(int)
-            y_star[:, :, t] = current_t_optimal_decisions
-            capacity_after_decision = capacity_states_bc - consumptions_bc * current_t_optimal_decisions
-            capacity_after_decision = np.maximum(0, capacity_after_decision)
-            value_at_cap_after_decision = np.zeros_like(capacity_after_decision, dtype=np.float64)
-            for j_ in range(J):
-                for c_ in range(leg_capacity + 1):
-                    value_at_cap_after_decision[j_, c_] = next_t_value_func[capacity_after_decision[j_, c_]]
-            sum_val = probs_jt[:, t].reshape(-1, 1) * (
-                current_t_lambdas_j * current_t_optimal_decisions + value_at_cap_after_decision
-            )
-            vartheta_table[:, t] = np.sum(sum_val, axis=0)
-        return vartheta_table, y_star
+        return InstanceRM._jit_solve_single_leg_dp(
+            self.T, self.J, leg_capacity, leg_consumptions_j, probs_jt, leg_lambdas_jt
+        )
 
     def compute_state_probabilities(self, leg_idx: int, y_star: np.ndarray) -> np.ndarray:
         """
         Compute state occupancy probabilities mu[t, x] for resource i.
-        Pure numpy implementation (no numba).
-        Returns:
-            mu_table: (T, C+1)
+        This method now calls a JIT-compiled helper function.
         """
         leg_capacity = self.C[leg_idx]
         if leg_capacity < 0:
-            return np.zeros((self.T, 0))
-        T = self.T
-        J = self.J
-        probs_jt = self.probabilities.T  # (J, T)
-        A_leg_consumption_j = self.A[leg_idx, :]  # (J,)
-        mu_table = np.zeros((T, leg_capacity + 1))
-        mu_table[0, leg_capacity] = 1.0
-        capacity_states = np.arange(leg_capacity + 1)
-        A_leg_consumption_j_bc = A_leg_consumption_j.reshape(-1, 1)
-        epsilon_prob = 1e-9
+            return np.zeros((self.T, 0)) # Or handle as error
 
-        for t in range(T - 1):
-            mu_next_t = np.zeros(leg_capacity + 1)
-            active_capacity_indices = np.where(mu_table[t] > epsilon_prob)[0]
-            if active_capacity_indices.shape[0] == 0:
-                mu_table[t + 1] = mu_next_t
-                continue
-            active_capacity_states_arr = capacity_states[active_capacity_indices]
-            active_state_probs_arr = mu_table[t, active_capacity_indices]
-            current_t_probs_j = probs_jt[:, t]
-            prob_sum_requests_at_t = np.sum(current_t_probs_j)
-            prob_no_request = max(0.0, 1.0 - prob_sum_requests_at_t)
-            if prob_no_request > epsilon_prob:
-                for i in range(active_capacity_states_arr.shape[0]):
-                    cap_state = active_capacity_states_arr[i]
-                    prob_mass = active_state_probs_arr[i]
-                    mu_next_t[cap_state] += prob_mass * prob_no_request
-            y_star_slice = y_star[:, active_capacity_indices, t]
-            cap_reduction = A_leg_consumption_j_bc * y_star_slice
-            capacity_next_state_matrix = np.maximum(0, active_capacity_states_arr.reshape(1, -1) - cap_reduction)
-            transition_probs_jt_active = current_t_probs_j.reshape(-1, 1) * active_state_probs_arr.reshape(1, -1)
-            for j_idx in range(J):
-                for active_idx in range(active_capacity_states_arr.shape[0]):
-                    if transition_probs_jt_active[j_idx, active_idx] > epsilon_prob:
-                        next_cap = int(capacity_next_state_matrix[j_idx, active_idx])
-                        prob_to_add = transition_probs_jt_active[j_idx, active_idx]
-                        mu_next_t[next_cap] += prob_to_add
-            mu_table[t + 1] = mu_next_t
-        return mu_table
+        # Ensure arrays passed to Numba are contiguous if sliced.
+        probs_jt = np.ascontiguousarray(self.probabilities.T) # (J, T)
+        A_leg_consumption_j = np.ascontiguousarray(self.A[leg_idx, :]) # (J,)
+        # y_star is (J, C_i+1, T). Ensure it's also contiguous if it's a result of operations.
+        # Typically, y_star from _jit_solve_single_leg_dp should be C-contiguous by default.
+        y_star_cont = np.ascontiguousarray(y_star)
+
+        return InstanceRM._jit_compute_state_probabilities(
+            self.T, self.J, leg_capacity, probs_jt, A_leg_consumption_j, y_star_cont
+        )
 
     def compute_vartheta_subgradient(self, leg_idx: int, mu: np.ndarray, y_star: np.ndarray) -> np.ndarray:
         """
@@ -319,8 +464,11 @@ class InstanceRM:
         Returns:
             np.ndarray: Subgradient G[j, t] as an array of shape (J, T).
         """
+        # Calculate expected y_star[j,t] by summing over reachable states (mu > 1e-9)
         mu_filtered = np.where(mu > 1e-9, mu, 0)
         expected_y_star = np.einsum('tc,jct->jt', mu_filtered, y_star, optimize=True)
+        
+        # Multiply by request probabilities to get final subgradient
         return self.probabilities.T * expected_y_star
 
     def compute_V_lambda_subgradient(self) -> tuple[float, np.ndarray]:
@@ -386,10 +534,12 @@ class InstanceRM:
         """
         # Initialize multipliers and constraints
         self.lmd = np.copy(initial_lambdas if initial_lambdas is not None else self.lmd)
+        # Mask for (leg, itinerary) pairs where itinerary j does not use leg i (A[i,j]=0)
         zero_consumption_mask = self.A == 0  # (L, J) 
+        # Ensure lmd is 3D (L, J, T) before applying 2D mask across T
         if self.lmd.ndim == 3 and zero_consumption_mask.ndim == 2:
             self.lmd[zero_consumption_mask, :] = 0 
-        elif self.lmd.shape[:2] == zero_consumption_mask.shape:
+        elif self.lmd.shape[:2] == zero_consumption_mask.shape : # If lmd is (L,J) for some reason
             self.lmd[zero_consumption_mask] = 0
 
         V_history = []
@@ -404,30 +554,36 @@ class InstanceRM:
             current_V, current_grad = self.compute_V_lambda_subgradient()
             V_history.append(current_V)
             
-            if current_V < best_V - eps:
+            # Update best value and check for improvement
+            if current_V < best_V - eps: # Sufficient improvement
                 best_V = current_V
                 no_improvement_count = 0
                 best_V_iter = k
             else:
                 no_improvement_count += 1
+            # Print and check convergence
             if verbose and (k % print_every == 0 or k == max_iter - 1):
                 print(f"Iter {k:4d}: V={current_V:.1f} | Best={best_V:.1f} (@{best_V_iter}) | No improve: {no_improvement_count}/{patience_iters}")
 
+            # Stopping condition: no improvement for patience_iters
             if no_improvement_count >= patience_iters:
                 if verbose:
                     print(f"\nStopping at iter {k}: No improvement > {eps} for {patience_iters} iterations.")
                     print(f"Best V remained {best_V:.6f} from iter {best_V_iter}")
                 break
                 
-            step_size_k = alpha0 / np.sqrt(k + 1)
+            # Projected subgradient update
+            step_size_k = alpha0 / np.sqrt(k + 1) # Diminishing step size
             self.lmd -= step_size_k * current_grad
-            self.lmd = np.maximum(0, self.lmd)
+            self.lmd = np.maximum(0, self.lmd) # Project onto non-negative orthant
+            
+            # Enforce lambda_ijt=0 where A[i,j]=0
             if self.lmd.ndim == 3 and zero_consumption_mask.ndim == 2:
                 self.lmd[zero_consumption_mask, :] = 0
-            elif self.lmd.shape[:2] == zero_consumption_mask.shape:
-                self.lmd[zero_consumption_mask] = 0
+            elif self.lmd.shape[:2] == zero_consumption_mask.shape: # Fallback if lmd happens to be 2D
+                 self.lmd[zero_consumption_mask] = 0
 
-        if verbose and k == max_iter - 1 and len(V_history) == max_iter:
+        if verbose and k == max_iter - 1 and len(V_history) == max_iter: # Check if max_iter was reached without other convergence
             print(f"Max iterations ({max_iter}) reached. Final V={V_history[-1]:.6f}")
             
         return self.lmd, V_history
@@ -452,63 +608,95 @@ class InstanceRM:
         if self.L == 0 or N_sim <= 0:
             return 0.0
 
+        # Backup and set multipliers if provided
         original_lmd_backup = None
         if optimized_lambdas is not None:
             original_lmd_backup = np.copy(self.lmd) 
             self.lmd = np.copy(optimized_lambdas)
 
+        # Pre-compute value functions (vartheta tables) for all legs using current self.lmd
+        # self.vartheta stores these tables: (L, max_C+1, T+1)
         for i in range(self.L):
-            vartheta_i_table, _ = self.solve_single_leg_dp(i)
+            vartheta_i_table, _ = self.solve_single_leg_dp(i) # vartheta_i_table is (C_i+1, T+1)
             self.vartheta[i, :(self.C[i]+1), :] = vartheta_i_table
+            # Extend values for capacities > C_i if vartheta table is larger (due to max_C)
+            # This assumes value is constant for capacities beyond actual C_i (reasonable for DP structure)
             if self.C[i] < self.vartheta.shape[1] - 1:
                  self.vartheta[i, (self.C[i]+1):, :] = vartheta_i_table[self.C[i], :][np.newaxis, :]
 
-        cumulative_arrival_probs_t = np.zeros((self.T, self.J + 1))
+        # Pre-compute cumulative probability arrays for faster sampling of arriving requests
+        # For each time t, cumulative_arrival_probs_t[t, j] = sum_{k<=j} P(request k or no request)
+        cumulative_arrival_probs_t = np.zeros((self.T, self.J + 1)) # +1 for no-request
         for t in range(self.T):
-            arrival_probs_current_t = self.probabilities[t, :]
+            arrival_probs_current_t = self.probabilities[t, :] # Probabilities for itineraries at time t
             prob_no_request_current_t = max(0.0, 1.0 - np.sum(arrival_probs_current_t))
+            # Extended probabilities including no-request pseudo-itinerary (index J)
             extended_probs_at_t = np.append(arrival_probs_current_t, prob_no_request_current_t)
             sum_probs_at_t = np.sum(extended_probs_at_t)
-            if sum_probs_at_t > 1e-9:
+            if sum_probs_at_t > 1e-9: # Normalize if sum is not zero
+                # Ensure non-negative and normalize
                 extended_probs_at_t = np.maximum(extended_probs_at_t, 0) / sum_probs_at_t 
             cumulative_arrival_probs_t[t, :] = np.cumsum(extended_probs_at_t)
 
-        itinerary_consumption_vectors = self.A.T
+        # Pre-compute consumption patterns and involved legs for quick lookup
+        itinerary_consumption_vectors = self.A.T  # Shape (J, L); row j is consumption vector for itinerary j
+        # List of boolean masks, one per itinerary, indicating which legs it uses
         itinerary_leg_usage_masks = [itinerary_consumption_vectors[j] > 0 for j in range(self.J)]
 
+        # Monte Carlo simulation
         total_simulated_revenue = 0.0
 
         for _ in range(N_sim):
             current_run_revenue = 0.0
-            current_capacities = np.copy(self.C)
+            current_capacities = np.copy(self.C) # Capacities for this simulation run
 
-            for t in range(self.T):
-                if self.J == 0 or cumulative_arrival_probs_t[t, -1] <= 1e-9:
-                    continue
-                random_sample = np.random.random()
+            for t in range(self.T): # Iterate over time periods
+                # Fast sampling of itinerary request (or no request) using pre-computed cumulative probabilities
+                if self.J == 0 or cumulative_arrival_probs_t[t, -1] <= 1e-9: # No itineraries or no chance of request
+                    continue # Go to next time period
+                    
+                random_sample = np.random.random() # Uniform random number in [0,1)
+                # Find first index where cumulative_arrival_probs_t >= random_sample
                 sampled_idx = np.searchsorted(cumulative_arrival_probs_t[t, :], random_sample)
-                if sampled_idx >= self.J:
-                    continue
+                
+                if sampled_idx >= self.J:  # This means no actual itinerary was requested (sampled the no-request part)
+                    continue # Go to next time period
+                
+                # Process request for itinerary req_itinerary_idx
                 req_itinerary_idx = sampled_idx 
-                req_itinerary_consumption = itinerary_consumption_vectors[req_itinerary_idx]
-                req_itinerary_legs_mask = itinerary_leg_usage_masks[req_itinerary_idx]
+                req_itinerary_consumption = itinerary_consumption_vectors[req_itinerary_idx] # Consumption vector (L,)
+                req_itinerary_legs_mask = itinerary_leg_usage_masks[req_itinerary_idx] # Boolean mask (L,)
+                
+                # Check capacity constraints for all legs involved in this itinerary
                 if not np.all(current_capacities[req_itinerary_legs_mask] >= req_itinerary_consumption[req_itinerary_legs_mask]):
-                    continue
+                    continue  # Insufficient capacity on at least one required leg
+
+                # Calculate total opportunity cost for accepting this itinerary request
+                # This sums (V(x_i, t+1) - V(x_i - a_ij, t+1)) over all legs i used by itinerary j
                 involved_leg_indices = np.where(req_itinerary_legs_mask)[0]
                 involved_leg_current_caps = current_capacities[involved_leg_indices]
                 involved_leg_consumption_units = req_itinerary_consumption[involved_leg_indices]
                 involved_leg_new_caps = involved_leg_current_caps - involved_leg_consumption_units
+                
+                # Fetch values from pre-computed self.vartheta table
+                # self.vartheta has shape (L, max_C+1, T+1)
+                # Need to index carefully for involved_leg_indices, their capacities, and time t+1
                 val_at_current_caps_involved = self.vartheta[involved_leg_indices, involved_leg_current_caps, t + 1]
                 val_at_new_caps_involved = self.vartheta[involved_leg_indices, involved_leg_new_caps, t + 1]
+                
                 opportunity_cost = np.sum(val_at_current_caps_involved - val_at_new_caps_involved)
+                
+                # Acceptance decision: accept if fare covers or exceeds opportunity cost
                 if self.F[req_itinerary_idx] >= opportunity_cost:
                     current_run_revenue += self.F[req_itinerary_idx]
+                    # Update capacities for the legs consumed by the accepted itinerary
                     current_capacities[req_itinerary_legs_mask] -= req_itinerary_consumption[req_itinerary_legs_mask]
 
             total_simulated_revenue += current_run_revenue
         
         estimated_expected_revenue = total_simulated_revenue / N_sim
 
+        # Restore original multipliers if they were changed for this simulation
         if original_lmd_backup is not None:
             self.lmd = original_lmd_backup
             

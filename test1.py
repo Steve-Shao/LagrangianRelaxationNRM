@@ -126,14 +126,13 @@ class InstanceRM:
         For each i, t, lmd_ijt = f_j / sum_j a_ij if a_ij > 0, and 0 otherwise.
         """
         lmd_ij = np.zeros((self.L, self.J))
-        for i in range(self.L):
-            a_ij = self.A[i]
+        for j in range(self.J):
+            a_ij = self.A[:, j]
             denom = np.sum(a_ij)
-            for j in range(self.J):
-                if a_ij[j] > 0 and denom > 0:
-                    lmd_ij[i, j] = self.F[j] / denom
-                else:
-                    lmd_ij[i, j] = 0.0
+            if denom > 0:
+                for i in range(self.L):
+                    if a_ij[i] > 0:
+                        lmd_ij[i, j] = self.F[j] / denom
         self.lmd = np.repeat(lmd_ij[:, :, None], self.T, axis=2)
 
     def solve_single_leg_dp(self, leg_idx):
@@ -190,6 +189,7 @@ class InstanceRM:
         for i in range(self.L):
             vartheta, _ = self.solve_single_leg_dp(i)
             total += vartheta[self.C[i], 0]
+            print(f"Leg {i} value function: {vartheta[self.C[i], 0]}")
 
         # Add the expected revenue adjustment term
         for t in range(self.T):
@@ -246,7 +246,7 @@ class InstanceRM:
 
 
 if __name__ == "__main__":
-    data_path = "data/200_rm_datasets/rm_200_4_1.0_8.0.txt"
+    data_path = "data/200_rm_datasets/rm_200_4_1.0_4.0.txt"
     inst = InstanceRM(data_path)
 
     print(f"T: {inst.T}")

@@ -1,3 +1,13 @@
+1. fix tau=600 case
+1b. make sure code runs correct when exceeds max iter
+2. clean up documentation
+3. rearrange code
+6. add testing code for all. generate table
+4. update readme
+5. push to github
+
+
+
 # Implementation of the Lagrangian Relaxation Algorithm for Network Revenue Management
 
 <br>

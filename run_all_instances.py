@@ -133,17 +133,75 @@ if __name__ == "__main__":
         lr_upper_bound = {}
         print(f"Warning: {bounds_json_path} not found. No LR upper bounds loaded.")
 
+    # Read our own generated results
+    our_revenues = {}
+    our_bounds = {}
+    our_revenue_std_err = {} # New dictionary for standard error
+    results_main_dir = "results"
+    if os.path.exists(results_main_dir):
+        for item_name in os.listdir(results_main_dir):
+            instance_results_dir = os.path.join(results_main_dir, item_name)
+            # Check if it's a directory (an instance folder)
+            if os.path.isdir(instance_results_dir):
+                instance_name = item_name 
+                our_results_json_path = os.path.join(instance_results_dir, "results.json")
+                    try:
+                        with open(our_results_json_path, "r") as f:
+                            our_data = json.load(f)
+                        our_revenues[instance_name] = our_data.get("estimated_revenue")
+                        our_bounds[instance_name] = our_data.get("final_V_lambda")
+                        our_revenue_std_err[instance_name] = our_data.get("std_error") # Get std_error
+                    except json.JSONDecodeError:
+                        print(f"Warning: Could not decode JSON from {our_results_json_path} for instance {instance_name}")
+                    except Exception as e:
+                        print(f"Warning: Error reading {our_results_json_path} for instance {instance_name}: {e}")
+    print(f"Loaded our generated revenue for {len(our_revenues)} instances from '{results_main_dir}' subfolders.")
+    print(f"Loaded our generated upper bounds for {len(our_bounds)} instances from '{results_main_dir}' subfolders.")
+    print(f"Loaded our generated revenue standard errors for {len(our_revenue_std_err)} instances from '{results_main_dir}' subfolders.")
+
     # Save a markdown file with a table of LR revenue and upper bounds from all instances
-    os.makedirs("results", exist_ok=True)
-    md_path = os.path.join("results", "huseyin_lr_revenue.md")
+    os.makedirs(results_main_dir, exist_ok=True)
+    md_path = os.path.join(results_main_dir, "comparison_results.md")
     with open(md_path, "w") as f:
-        f.write("| Problem | LR Revenue (Huseyin) | LR Upper Bound |\n")
-        f.write("|---------|----------------------|---------------|\n")
-        all_problems = set(huseyin_lr_revenue.keys()) | set(lr_upper_bound.keys())
-        for problem in sorted(all_problems):
-            lr_rev = huseyin_lr_revenue.get(problem, "-")
-            lr_ub = lr_upper_bound.get(problem, "-")
-            f.write(f"| {problem} | {lr_rev} | {lr_ub} |\n")
-    print(f"Markdown table of LR revenue and upper bounds saved to {md_path}")
+        f.write("| Problem | Upper Bound (Huseyin) | Upper Bound (Our Impl.) | Mean Revenue (Huseyin) | Mean Revenue (Our Impl.) | Std (Our Impl., 1000 Samples) |\n")
+        f.write("|---------|-----------------------|-------------------------|-------------------|---------------------|-----------------------|\n")
+        
+        all_problem_names = set(huseyin_lr_revenue.keys()) | \
+                            set(lr_upper_bound.keys()) | \
+                            set(our_revenues.keys()) | \
+                            set(our_bounds.keys()) | \
+                            set(our_revenue_std_err.keys())
+                            
+        for problem_name in sorted(list(all_problem_names)):
+            h_lr_ub_val = lr_upper_bound.get(problem_name)
+            h_lr_ub_formatted = f"{int(h_lr_ub_val):,}" if isinstance(h_lr_ub_val, (float, int)) else "-"
+            
+            our_bnd_val = our_bounds.get(problem_name)
+            our_bnd_color = "black"
+            if isinstance(our_bnd_val, (float, int)) and isinstance(h_lr_ub_val, (float, int)):
+                if our_bnd_val < h_lr_ub_val:
+                    our_bnd_color = "green"
+                elif our_bnd_val > h_lr_ub_val:
+                    our_bnd_color = "red"
+            our_bnd_formatted = f'<font color="{our_bnd_color}">{int(our_bnd_val):,}</font>' if isinstance(our_bnd_val, (float, int)) else "-"
+            
+            h_lr_rev_val = huseyin_lr_revenue.get(problem_name)
+            h_lr_rev_formatted = f"{int(h_lr_rev_val):,}" if isinstance(h_lr_rev_val, (float, int)) else "-"
+            
+            our_rev_val = our_revenues.get(problem_name)
+            our_rev_color = "black"
+            if isinstance(our_rev_val, (float, int)) and isinstance(h_lr_rev_val, (float, int)):
+                if our_rev_val > h_lr_rev_val:
+                    our_rev_color = "green"
+                elif our_rev_val < h_lr_rev_val:
+                    our_rev_color = "red"
+            our_rev_formatted = f'<font color="{our_rev_color}">{int(our_rev_val):,}</font>' if isinstance(our_rev_val, (float, int)) else "-"
+            
+            our_std_err_val = our_revenue_std_err.get(problem_name)
+            our_std_err_formatted = f"{our_std_err_val:,.2f}" if isinstance(our_std_err_val, (float, int)) else "-"
+
+            f.write(f"| {problem_name} | {h_lr_ub_formatted} | {our_bnd_formatted} | {h_lr_rev_formatted} | {our_rev_formatted} | {our_std_err_formatted} |\n")
+            
+    print(f"Markdown table with comprehensive results saved to {md_path}")
 
     

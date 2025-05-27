@@ -6,7 +6,8 @@ class InstanceRM:
     """
     InstanceRM parses an airline revenue management test problem file.
 
-    The file encodes a single-leg or network airline RM instance. It contains flight legs, itineraries, fares, and a time-indexed demand probability matrix.
+    The file encodes a single-leg or network airline RM instance. It contains 
+    flight legs, itineraries, fares, and a time-indexed demand probability matrix.
 
     Attributes:
         T (int): Number of time periods.
@@ -16,31 +17,45 @@ class InstanceRM:
         itineraries (np.ndarray[str]): Array of itinerary names, each as "O{o}D{d}F{c}".
         F (np.ndarray[float]): Array of fares for each itinerary.
         J (int): Number of itineraries.
-        probabilities (np.ndarray[float]): Matrix of shape (T, J). probabilities[t, j] = probability of request for itinerary j at time t.
-        A (np.ndarray[int]): Matrix of shape (L, J). A[i, j] = 1 if itinerary j uses leg i, 0 otherwise.
+        probabilities (np.ndarray[float]): Matrix of shape (T, J). probabilities[t, j] = 
+            probability of request for itinerary j at time t.
+        A (np.ndarray[int]): Matrix of shape (L, J). A[i, j] = 1 if itinerary j uses leg i, 
+            0 otherwise.
         lmd (np.ndarray[float]): Array of shape (L, J, T) with Lagrange multipliers.
         vartheta (np.ndarray[float]): Array of shape (L, max(C)+1, T+1) for value functions.
 
     File Format:
         - First line: integer τ, the number of time periods.
         - Second line: integer N, the number of flight legs.
-        - Next N lines: each line has three integers o d cap, the origin, destination, and capacity of a flight leg.
+        - Next N lines: each line has three integers o d cap, the origin, destination, 
+          and capacity of a flight leg.
         - Next line: integer M, the number of itineraries.
-        - Next M lines: each line has four values: o d c fare, the origin, destination, fare class, and fare of an itinerary.
-        - Next τ lines: each line lists demand probabilities for that time period, in the format:
+        - Next M lines: each line has four values: o d c fare, the origin, destination, 
+          fare class, and fare of an itinerary.
+        - Next τ lines: each line lists demand probabilities for that time period, 
+          in the format:
             [o d c] p  [o d c] p  ... (for all itineraries)
-          where [o d c] identifies the itinerary and p is the probability of a request for that itinerary at that time.
+          where [o d c] identifies the itinerary and p is the probability of a request 
+          for that itinerary at that time.
 
     Methods:
         __init__(filepath): Loads and parses the instance file.
         _parse_file(filepath): Parses the file and sets attributes.
         _initialize_lambdas(): Initializes the Lagrange multiplier array.
-        solve_single_leg_dp(leg_idx): Solves the single-resource dynamic program for a specific flight leg.
-        compute_state_probabilities(leg_idx, y_star): Compute state occupancy probabilities mu[t, x] for a resource i.
-        compute_vartheta_subgradient(leg_idx, mu, y_star): Compute the subgradient G[j, t] of the single-resource value function with respect to Lagrange multipliers.
-        compute_V_lambda_subgradient(): Compute the value of the Lagrangian relaxation and its subgradient with respect to each Lagrange multiplier.
-        minimize_lr_relaxation(lmd0=None, alpha0=1.0, eps=1e-5, max_iter=1000, verbose=False, print_every=10): Minimize the Lagrangian relaxation using projected subgradient descent.
-        simulate_revenue_with_bid_prices(N_sim: int, optimized_lmd_param: np.ndarray = None) -> float: Estimate total expected revenue using the bid price policy derived from Lagrangian multipliers, via Monte Carlo simulation.
+        solve_single_leg_dp(leg_idx): Solves the single-resource dynamic program for 
+            a specific flight leg.
+        compute_state_probabilities(leg_idx, y_star): Compute state occupancy probabilities 
+            mu[t, x] for a resource i.
+        compute_vartheta_subgradient(leg_idx, mu, y_star): Compute the subgradient G[j, t] 
+            of the single-resource value function with respect to Lagrange multipliers.
+        compute_V_lambda_subgradient(): Compute the value of the Lagrangian relaxation 
+            and its subgradient with respect to each Lagrange multiplier.
+        minimize_lr_relaxation(lmd0=None, alpha0=1.0, eps=1e-5, max_iter=1000, 
+            verbose=False, print_every=10): Minimize the Lagrangian relaxation using 
+            projected subgradient descent.
+        simulate_revenue_with_bid_prices(N_sim: int, optimized_lmd_param: np.ndarray = None) 
+            -> float: Estimate total expected revenue using the bid price policy derived 
+            from Lagrangian multipliers, via Monte Carlo simulation.
     """
 
     def __init__(self, filepath: str):
@@ -51,9 +66,9 @@ class InstanceRM:
             filepath (str): Path to the airline RM instance file.
         """
         self._parse_file(filepath)
-        self._ensure_probabilities_sum_to_one() # Add dummy itinerary if needed
+        self._ensure_probabilities_sum_to_one()  # Add dummy itinerary if needed
         self._initialize_lambdas()
-        self.vartheta = np.zeros((self.L, max(self.C)+1, self.T+1))  # (L, C+1, T+1)
+        self.vartheta = np.zeros((self.L, max(self.C) + 1, self.T + 1))  # (L, C+1, T+1)
 
     def _parse_file(self, filepath: str):
         """
@@ -82,7 +97,8 @@ class InstanceRM:
         """
         with open(filepath, 'r') as f:
             # Read all lines, stripping whitespace and removing comments/empty lines.
-            lines = [line.strip() for line in f if line.strip() and not line.lstrip().startswith('#')]
+            lines = [line.strip() for line in f 
+                    if line.strip() and not line.lstrip().startswith('#')]
 
         line_iterator = iter(lines)
 
@@ -100,7 +116,9 @@ class InstanceRM:
         for _ in range(num_flight_legs):
             line_content = next(line_iterator)
             parts = line_content.split()
-            leg_origin_id, leg_dest_id, leg_capacity = int(parts[0]), int(parts[1]), int(parts[2])
+            leg_origin_id, leg_dest_id, leg_capacity = (
+                int(parts[0]), int(parts[1]), int(parts[2])
+            )
             
             # Flight leg names are formatted as "O{origin}D{destination}"
             leg_name = f"O{leg_origin_id}D{leg_dest_id}"
@@ -113,14 +131,15 @@ class InstanceRM:
         # Section 3: Parse Itinerary Definitions
         # Next M lines: origin_id destination_id fare_class_id fare_value
         # These o, d, c define the overall itinerary.
-        itinerary_key_tuples = [] # Stores (origin_id, dest_id, fare_class_id) tuples for mapping
-        parsed_itineraries_list = []    # Stores "O{o}D{d}F{c}" formatted names
+        itinerary_key_tuples = []  # Stores (origin_id, dest_id, fare_class_id) tuples for mapping
+        parsed_itineraries_list = []  # Stores "O{o}D{d}F{c}" formatted names
         parsed_fares_list = []
         for _ in range(num_itineraries):
             line_content = next(line_iterator)
             parts = line_content.split()
-            itin_origin_id, itin_dest_id, itin_fare_class_id, itin_fare_value = \
+            itin_origin_id, itin_dest_id, itin_fare_class_id, itin_fare_value = (
                 int(parts[0]), int(parts[1]), int(parts[2]), float(parts[3])
+            )
             
             # Itinerary names are formatted as "O{origin}D{destination}F{fare_class}"
             itinerary_name = f"O{itin_origin_id}D{itin_dest_id}F{itin_fare_class_id}"
@@ -205,45 +224,46 @@ class InstanceRM:
 
     def _ensure_probabilities_sum_to_one(self):
         """
-        Ensures that the sum of probabilities for all itineraries (including a potential new dummy)
-        is 1 for each time period. If the sum is less than 1, a dummy itinerary
+        Ensures that the sum of probabilities for all itineraries (including a potential 
+        new dummy) is 1 for each time period. If the sum is less than 1, a dummy itinerary
         is added with zero fare, zero resource consumption, and the necessary
         arrival probability to make the sum 1.
         """
         prob_sum_per_t = np.sum(self.probabilities, axis=1)
-        epsilon = 1e-9 # Tolerance for floating point comparison
+        epsilon = 1e-9  # Tolerance for floating point comparison
 
         # Check if any time period has a sum of probabilities significantly less than 1
         if np.any(prob_sum_per_t < 1.0 - epsilon):
             dummy_itinerary_name = "DUMMY_NO_REQUEST"
-            print(f"Info: Sum of probabilities per time period found to be < 1. Adding dummy itinerary '{dummy_itinerary_name}' to compensate.")
+            print(f"Info: Sum of probabilities per time period found to be < 1. "
+                  f"Adding dummy itinerary '{dummy_itinerary_name}' to compensate.")
 
             # Update itineraries: Convert to list, append, convert back to handle dtype
             itineraries_list = self.itineraries.tolist()
             itineraries_list.append(dummy_itinerary_name)
-            self.itineraries = np.array(itineraries_list) # Dtype will be inferred, typically <U based on max length
+            self.itineraries = np.array(itineraries_list)  # Dtype will be inferred
             
             # Update fares
             self.F = np.append(self.F, 0.0)
             
             # Update A matrix (add a column of zeros for the dummy itinerary)
-            if self.L > 0 : # Only add column if there are legs
+            if self.L > 0:  # Only add column if there are legs
                 dummy_A_column = np.zeros((self.L, 1), dtype=self.A.dtype)
                 self.A = np.hstack((self.A, dummy_A_column))
-            elif self.J == 0 : # If there were no itineraries and L=0, A might be uninitialized or 0-dim
+            elif self.J == 0:  # If there were no itineraries and L=0, A might be uninitialized
                 # This case implies A was likely shape (0,0) or similar.
                 # If L=0, A should be (0, J+1). It's initialized to (L,J).
                 # If self.A was (0, old_J), hstacking (0,1) makes it (0, old_J+1)
                 dummy_A_column = np.zeros((0, 1), dtype=self.A.dtype)
                 self.A = np.hstack((self.A, dummy_A_column))
 
-
             # Calculate probabilities for the dummy itinerary
             dummy_itinerary_probs = 1.0 - prob_sum_per_t
-            dummy_itinerary_probs = np.maximum(0.0, dummy_itinerary_probs) # Ensure non-negative
+            dummy_itinerary_probs = np.maximum(0.0, dummy_itinerary_probs)  # Ensure non-negative
             
             # Update probabilities matrix (add a column for the dummy itinerary)
-            self.probabilities = np.hstack((self.probabilities, dummy_itinerary_probs.reshape(-1, 1)))
+            self.probabilities = np.hstack((self.probabilities, 
+                                          dummy_itinerary_probs.reshape(-1, 1)))
             
             # Update number of itineraries
             self.J += 1
@@ -266,15 +286,17 @@ class InstanceRM:
         
         # Ensure self.F has J elements; handle cases where valid_itineraries_mask might be all False
         if np.any(valid_itineraries_mask):
-             # Check if self.F has enough elements for the mask
+            # Check if self.F has enough elements for the mask
             if self.F.shape[0] == self.J:
-                 fare_per_leg_segment[valid_itineraries_mask] = self.F[valid_itineraries_mask] / num_legs_used_by_itinerary[valid_itineraries_mask]
-            else: # Fallback or error, depends on how self.F is guaranteed to be size J
-                  # This case implies a potential mismatch if self.F is not size J.
-                  # For now, assume self.F is always correctly sized.
-                  # If F can be smaller than J before dummy, this needs adjustment.
-                  # Assuming F is updated with dummy itinerary if one is added.
-                  pass # Let it be zero if F is not aligned, or raise error.
+                fare_per_leg_segment[valid_itineraries_mask] = (
+                    self.F[valid_itineraries_mask] / num_legs_used_by_itinerary[valid_itineraries_mask]
+                )
+            else:  # Fallback or error, depends on how self.F is guaranteed to be size J
+                # This case implies a potential mismatch if self.F is not size J.
+                # For now, assume self.F is always correctly sized.
+                # If F can be smaller than J before dummy, this needs adjustment.
+                # Assuming F is updated with dummy itinerary if one is added.
+                pass  # Let it be zero if F is not aligned, or raise error.
 
         # lambdas_leg_itinerary (L, J)
         # If A_ij > 0, lambda_ij = fare_per_leg_segment[j], else 0
@@ -287,6 +309,7 @@ class InstanceRM:
         """
         Solve the single-resource dynamic program for a flight leg using backward induction.
         Pure numpy implementation (no numba).
+        
         Returns:
             tuple: (vartheta_table, y_star)
                 vartheta_table: (C+1, T+1)
@@ -305,7 +328,7 @@ class InstanceRM:
         y_star = np.zeros((J, leg_capacity + 1, T), dtype=int)
         
         # Array of capacity states [0, 1, ..., leg_capacity]
-        capacity_states = np.arange(leg_capacity + 1) # Shape: (leg_capacity + 1,)
+        capacity_states = np.arange(leg_capacity + 1)  # Shape: (leg_capacity + 1,)
 
         # Broadcastable versions of consumptions and capacity states
         # consumptions_bc[j, c] = leg_consumptions_j[j]
@@ -330,14 +353,14 @@ class InstanceRM:
             
             # Clip capacities at 0, as capacity cannot be negative
             # These are the indices for next_t_value_func
-            valid_capacity_indices_if_accept = np.maximum(0, capacity_if_accept) # Shape: (J, leg_capacity + 1)
+            valid_capacity_indices_if_accept = np.maximum(0, capacity_if_accept)  # Shape: (J, leg_capacity + 1)
 
             # Calculate V_{t+1}(c - a_ij)
             # Initialize with -np.inf for cases where capacity is insufficient
             future_value_if_accept = np.full((J, leg_capacity + 1), -np.inf, dtype=float)
             
             # Get values from next_t_value_func using valid_capacity_indices_if_accept as indices
-            potential_future_values = next_t_value_func[valid_capacity_indices_if_accept] # Shape: (J, leg_capacity + 1)
+            potential_future_values = next_t_value_func[valid_capacity_indices_if_accept]  # Shape: (J, leg_capacity + 1)
             
             # Apply these values only where capacity is sufficient
             future_value_if_accept = np.where(sufficient_capacity_mask, potential_future_values, -np.inf)
@@ -356,7 +379,7 @@ class InstanceRM:
             # Capacity after making the optimal decision: c - a_ij * y*_ij(c)
             # Shape: (J, leg_capacity + 1)
             capacity_after_decision = capacity_states_bc - consumptions_bc * current_t_optimal_decisions
-            capacity_after_decision = np.maximum(0, capacity_after_decision) # Clip at 0
+            capacity_after_decision = np.maximum(0, capacity_after_decision)  # Clip at 0
 
             # V_{t+1}(c - a_ij * y*_ij(c))
             # Shape: (J, leg_capacity + 1)
@@ -371,7 +394,7 @@ class InstanceRM:
             
             # V_t(c) = sum over j of expected_value_contribution
             # Sum over axis 0 (products)
-            vartheta_table[:, t] = np.sum(expected_value_contribution, axis=0) # Shape: (leg_capacity + 1,)
+            vartheta_table[:, t] = np.sum(expected_value_contribution, axis=0)  # Shape: (leg_capacity + 1,)
             
         return vartheta_table, y_star
 
@@ -383,7 +406,8 @@ class InstanceRM:
         Args:
             leg_idx (int): Index of the leg.
             y_star (np.ndarray): Optimal policies for this leg, shape (J, C_i+1, T).
-                                 y_star[j, cap, t] is 1 if accept product j at capacity cap at time t, else 0.
+                                 y_star[j, cap, t] is 1 if accept product j at capacity cap 
+                                 at time t, else 0.
 
         Returns:
             mu_table (np.ndarray): State probabilities, shape (T, C_i+1).
@@ -391,7 +415,7 @@ class InstanceRM:
         """
         leg_capacity = self.C[leg_idx]  # Initial capacity for this leg C_i
         
-        if leg_capacity < 0: # Should ideally not happen with valid inputs
+        if leg_capacity < 0:  # Should ideally not happen with valid inputs
             return np.zeros((self.T, 0))
 
         if self.T == 0:
@@ -418,24 +442,24 @@ class InstanceRM:
 
         # Iterate over time periods t = 0, ..., T-2 to compute mu_table[t+1]
         for t in range(self.T - 1):
-            mu_current_t_probs = mu_table[t, :] # Probabilities of capacity states at current time t. Shape: (C_i+1,)
-            mu_next_t_probs = np.zeros(leg_capacity + 1) # Initialize probs for next time t+1. Shape: (C_i+1,)
+            mu_current_t_probs = mu_table[t, :]  # Probabilities of capacity states at current time t. Shape: (C_i+1,)
+            mu_next_t_probs = np.zeros(leg_capacity + 1)  # Initialize probs for next time t+1. Shape: (C_i+1,)
 
             # Find active capacity states at time t (states with P(cap) > epsilon_prob)
             # active_capacity_values are the actual capacity values that are active (e.g., [c1, c2, ...])
             active_capacity_values = np.where(mu_current_t_probs > epsilon_prob)[0]
 
-            if active_capacity_values.shape[0] == 0: # No reachable states at time t
-                mu_table[t + 1, :] = mu_next_t_probs # which is all zeros
+            if active_capacity_values.shape[0] == 0:  # No reachable states at time t
+                mu_table[t + 1, :] = mu_next_t_probs  # which is all zeros
                 continue
             
             # Probabilities of these active capacity states
-            active_state_probs_arr = mu_current_t_probs[active_capacity_values] # Shape: (num_active_caps,)
+            active_state_probs_arr = mu_current_t_probs[active_capacity_values]  # Shape: (num_active_caps,)
 
             # Part 1: Transitions if no (actual) product request arrives.
             # This handles the probability mass if sum of p_jt < 1 (i.e. no dummy "no-op" product).
             # If a dummy product is included in J and probs_jt such that sum(p_jt)=1, this part might be redundant.
-            current_t_arrival_probs_j = probs_jt[:, t] # Arrival probs for products at time t. Shape: (J,)
+            current_t_arrival_probs_j = probs_jt[:, t]  # Arrival probs for products at time t. Shape: (J,)
             prob_sum_actual_requests_at_t = np.sum(current_t_arrival_probs_j)
             prob_no_request_transition = max(0.0, 1.0 - prob_sum_actual_requests_at_t) 
 
@@ -443,28 +467,28 @@ class InstanceRM:
                 # If no request, capacity remains unchanged.
                 # Add P(active_cap) * P(no_request) to mu_next_t_probs[active_cap]
                 np.add.at(mu_next_t_probs, 
-                          active_capacity_values, # Target capacity states (indices for mu_next_t_probs)
-                          active_state_probs_arr * prob_no_request_transition) # Probabilities to add
+                          active_capacity_values,  # Target capacity states (indices for mu_next_t_probs)
+                          active_state_probs_arr * prob_no_request_transition)  # Probabilities to add
 
             # Part 2: Transitions if an (actual) product j requests
             # y_star shape is (J, C_i+1, T)
             # y_star_slice_t_active_caps[j, k] is optimal decision for product j if current capacity is active_capacity_values[k] at time t
-            y_star_slice_t_active_caps = y_star[:, active_capacity_values, t] # Shape: (J, num_active_caps)
+            y_star_slice_t_active_caps = y_star[:, active_capacity_values, t]  # Shape: (J, num_active_caps)
 
             # cap_reduction_matrix[j, k]: capacity reduction for product j if current capacity is active_capacity_values[k]
-            cap_reduction_matrix = A_leg_consumption_j_bc * y_star_slice_t_active_caps # Shape: (J, num_active_caps)
+            cap_reduction_matrix = A_leg_consumption_j_bc * y_star_slice_t_active_caps  # Shape: (J, num_active_caps)
 
             # active_capacity_values_bc is (1, num_active_caps)
             active_capacity_values_bc = active_capacity_values.reshape(1, -1) 
             # capacity_next_state_matrix[j, k]: next capacity if product j arrives and current capacity is active_capacity_values[k]
-            capacity_next_state_matrix = np.maximum(0, active_capacity_values_bc - cap_reduction_matrix) # Shape: (J, num_active_caps)
+            capacity_next_state_matrix = np.maximum(0, active_capacity_values_bc - cap_reduction_matrix)  # Shape: (J, num_active_caps)
 
             # transition_probs_matrix[j, k]: P(product j arrives AND current capacity is active_capacity_values[k])
             #   = P(product j arrives at t) * P(current capacity is active_capacity_values[k] at t)
-            current_t_arrival_probs_j_bc = current_t_arrival_probs_j.reshape(-1, 1) # Shape: (J, 1)
-            active_state_probs_arr_bc = active_state_probs_arr.reshape(1, -1) # Shape: (1, num_active_caps)
+            current_t_arrival_probs_j_bc = current_t_arrival_probs_j.reshape(-1, 1)  # Shape: (J, 1)
+            active_state_probs_arr_bc = active_state_probs_arr.reshape(1, -1)  # Shape: (1, num_active_caps)
             
-            transition_probs_matrix = current_t_arrival_probs_j_bc * active_state_probs_arr_bc # Shape: (J, num_active_caps)
+            transition_probs_matrix = current_t_arrival_probs_j_bc * active_state_probs_arr_bc  # Shape: (J, num_active_caps)
 
             # Flatten matrices for np.add.at
             # target_next_capacity_states_flat are the capacity states in mu_next_t_probs to update
@@ -514,8 +538,8 @@ class InstanceRM:
         """
         subgradient_matrix = np.zeros_like(self.lmd)
         sum_lambdas_over_legs = np.sum(self.lmd, axis=0)  # Sum over legs (J, T)
-        fare_minus_sum_lambdas = self.F[:, None] - sum_lambdas_over_legs # (J, T)
-        probs_jt = self.probabilities.T # (J, T)
+        fare_minus_sum_lambdas = self.F[:, None] - sum_lambdas_over_legs  # (J, T)
+        probs_jt = self.probabilities.T  # (J, T)
 
         # Calculate first term of V_lambda and its contribution to subgradient
         first_term_V_lambda = np.sum(probs_jt * np.maximum(fare_minus_sum_lambdas, 0))
@@ -529,7 +553,9 @@ class InstanceRM:
             sum_initial_varthetas += vartheta_i_table[self.C[i], 0]  # Value at initial capacity and t=0 for leg i
             
             # G_i is the subgradient of vartheta_i1(c_i) w.r.t. lambda_ijt (shape J, T)
-            vartheta_subgrad_i = self.compute_vartheta_subgradient(i, self.compute_state_probabilities(i, y_star_i), y_star_i)
+            vartheta_subgrad_i = self.compute_vartheta_subgradient(
+                i, self.compute_state_probabilities(i, y_star_i), y_star_i
+            )
             # Subgradient of V_lambda w.r.t. lambda_ijt for this leg i
             subgradient_matrix[i] = vartheta_subgrad_i - subgrad_contrib_from_first_term
 
@@ -549,7 +575,8 @@ class InstanceRM:
         Minimize the Lagrangian relaxation V^lambda_1(c_1) using projected subgradient descent.
 
         Args:
-            initial_lambdas (np.ndarray, optional): Initial multipliers of shape (L, J, T). Defaults to a copy of self.lmd.
+            initial_lambdas (np.ndarray, optional): Initial multipliers of shape (L, J, T). 
+                Defaults to a copy of self.lmd.
             alpha0 (float, optional): Initial step size. Default is 1.0.
             eps (float, optional): Convergence tolerance.
             max_iter (int, optional): Maximum number of iterations. Default is 1000.
@@ -577,7 +604,8 @@ class InstanceRM:
         no_improvement_count = 0
         
         if verbose:
-            print(f"Starting minimization: alpha0={alpha0}, eps={eps}, max_iter={max_iter}, patience_iters={patience_iters}")
+            print(f"Starting minimization: alpha0={alpha0}, eps={eps}, max_iter={max_iter}, "
+                  f"patience_iters={patience_iters}")
 
         for k in range(max_iter):
             current_V, current_grad = self.compute_V_lambda_subgradient()
@@ -589,8 +617,10 @@ class InstanceRM:
                 best_V_iter = k
             else:
                 no_improvement_count += 1
+                
             if verbose and (k % print_every == 0 or k == max_iter - 1):
-                print(f"Iter {k:4d}: V={current_V:.1f} | Best={best_V:.1f} (@{best_V_iter}) | No improve: {no_improvement_count}/{patience_iters}")
+                print(f"Iter {k:4d}: V={current_V:.1f} | Best={best_V:.1f} (@{best_V_iter}) | "
+                      f"No improve: {no_improvement_count}/{patience_iters}")
 
             if no_improvement_count >= patience_iters:
                 if verbose:
@@ -616,88 +646,89 @@ class InstanceRM:
         N_sim: int, 
         optimized_lambdas: np.ndarray = None
     ) -> float:
-        """
-        Estimate total expected revenue using the bid price policy derived from
-        Lagrangian multipliers, via Monte Carlo simulation.
-
-        Args:
-            N_sim (int): Number of simulation runs.
-            optimized_lambdas (np.ndarray, optional): Optimized Lagrangian multipliers
-                of shape (L, J, T). If None, uses `self.lmd`.
-
-        Returns:
-            float: Estimated total expected revenue.
-        """
         if self.L == 0 or N_sim <= 0:
             return 0.0
 
         original_lmd_backup = None
         if optimized_lambdas is not None:
-            original_lmd_backup = np.copy(self.lmd) 
+            original_lmd_backup = np.copy(self.lmd)
             self.lmd = np.copy(optimized_lambdas)
 
+        # Precompute value functions for all legs (vectorized)
         for i in range(self.L):
             vartheta_i_table, _ = self.solve_single_leg_dp(i)
-            self.vartheta[i, :(self.C[i]+1), :] = vartheta_i_table
+            self.vartheta[i, :self.C[i]+1, :] = vartheta_i_table
             if self.C[i] < self.vartheta.shape[1] - 1:
-                 self.vartheta[i, (self.C[i]+1):, :] = vartheta_i_table[self.C[i], :][np.newaxis, :]
+                self.vartheta[i, self.C[i]+1:, :] = vartheta_i_table[self.C[i], :]
 
-        cumulative_arrival_probs_t = np.zeros((self.T, self.J + 1))
+        # Vectorized simulation setup
+        current_capacities = np.tile(self.C, (N_sim, 1))  # (N_sim, L)
+        revenues = np.zeros(N_sim)
+        cum_probs = np.cumsum(self.probabilities, axis=1)  # (T, J)
+        rand_vals = np.random.random((N_sim, self.T))      # (N_sim, T)
+
+        # Vectorized request generation
+        # For each sim and t, find the first j where rand < cum_prob
+        # Fix: np.searchsorted expects 1D cum_probs for each t, so loop over t
+        requested_j = np.empty((N_sim, self.T), dtype=int)
         for t in range(self.T):
-            arrival_probs_current_t = self.probabilities[t, :]
-            prob_no_request_current_t = max(0.0, 1.0 - np.sum(arrival_probs_current_t))
-            extended_probs_at_t = np.append(arrival_probs_current_t, prob_no_request_current_t)
-            sum_probs_at_t = np.sum(extended_probs_at_t)
-            if sum_probs_at_t > 1e-9:
-                extended_probs_at_t = np.maximum(extended_probs_at_t, 0) / sum_probs_at_t 
-            cumulative_arrival_probs_t[t, :] = np.cumsum(extended_probs_at_t)
+            requested_j[:, t] = np.searchsorted(cum_probs[t], rand_vals[:, t], side="right")
 
-        itinerary_consumption_vectors = self.A.T
-        itinerary_leg_usage_masks = [itinerary_consumption_vectors[j] > 0 for j in range(self.J)]
+        # Precompute for vectorized access
+        A = self.A  # (L, J)
+        F = self.F  # (J,)
+        vartheta = self.vartheta  # (L, max_C+1, T+1)
 
-        total_simulated_revenue = 0.0
+        for t in range(self.T):
+            j_t = requested_j[:, t]  # (N_sim,)
+            # a_ij: (N_sim, L) resource consumption for each sim
+            a_ij = A[:, j_t].T  # (N_sim, L)
+            fares = F[j_t]      # (N_sim,)
 
-        for _ in range(N_sim):
-            current_run_revenue = 0.0
-            current_capacities = np.copy(self.C)
+            # Capacity check
+            sufficient = np.all(current_capacities >= a_ij, axis=1)  # (N_sim,)
 
-            for t in range(self.T):
-                if self.J == 0 or cumulative_arrival_probs_t[t, -1] <= 1e-9:
-                    continue
-                random_sample = np.random.random()
-                sampled_idx = np.searchsorted(cumulative_arrival_probs_t[t, :], random_sample)
-                if sampled_idx >= self.J:
-                    continue
-                req_itinerary_idx = sampled_idx 
-                req_itinerary_consumption = itinerary_consumption_vectors[req_itinerary_idx]
-                req_itinerary_legs_mask = itinerary_leg_usage_masks[req_itinerary_idx]
-                if not np.all(current_capacities[req_itinerary_legs_mask] >= req_itinerary_consumption[req_itinerary_legs_mask]):
-                    continue
-                involved_leg_indices = np.where(req_itinerary_legs_mask)[0]
-                involved_leg_current_caps = current_capacities[involved_leg_indices]
-                involved_leg_consumption_units = req_itinerary_consumption[involved_leg_indices]
-                involved_leg_new_caps = involved_leg_current_caps - involved_leg_consumption_units
-                val_at_current_caps_involved = self.vartheta[involved_leg_indices, involved_leg_current_caps, t + 1]
-                val_at_new_caps_involved = self.vartheta[involved_leg_indices, involved_leg_new_caps, t + 1]
-                opportunity_cost = np.sum(val_at_current_caps_involved - val_at_new_caps_involved)
-                if self.F[req_itinerary_idx] >= opportunity_cost:
-                    current_run_revenue += self.F[req_itinerary_idx]
-                    current_capacities[req_itinerary_legs_mask] -= req_itinerary_consumption[req_itinerary_legs_mask]
+            # Vectorized opportunity cost calculation
+            # For each sim and leg, get x_i and a_i
+            x_i = current_capacities  # (N_sim, L)
+            a_i = a_ij                # (N_sim, L)
+            t1 = t + 1
 
-            total_simulated_revenue += current_run_revenue
-        
-        estimated_expected_revenue = total_simulated_revenue / N_sim
+            # Only compute for sufficient and a_i > 0
+            valid = (a_i > 0) & sufficient[:, None]  # (N_sim, L)
+
+            # Prepare indices for advanced indexing
+            sim_idx, leg_idx = np.nonzero(valid)
+            x_vals = x_i[sim_idx, leg_idx]
+            a_vals = a_i[sim_idx, leg_idx]
+            # Clamp x_vals - a_vals to >= 0
+            x_minus_a = np.maximum(x_vals - a_vals, 0)
+
+            # Get opportunity cost for all valid (sim, leg)
+            opp_costs = np.zeros((N_sim, self.L), dtype=float)
+            opp_costs[sim_idx, leg_idx] = (
+                vartheta[leg_idx, x_vals, t1] - vartheta[leg_idx, x_minus_a, t1]
+            )
+
+            # Sum over legs for each sim
+            opportunity_cost = np.sum(opp_costs, axis=1)  # (N_sim,)
+
+            # Acceptance decision and updates
+            accept = (fares >= opportunity_cost) & sufficient  # (N_sim,)
+            revenues += fares * accept
+            # Only update capacities for accepted sims
+            current_capacities -= a_ij * accept[:, None]
 
         if original_lmd_backup is not None:
             self.lmd = original_lmd_backup
-            
-        return estimated_expected_revenue
+
+        return np.mean(revenues)
 
 
 if __name__ == "__main__":
     import os
 
-    data_path = "data/600_rm_datasets/rm_600_4_1.0_4.0.txt"
+    data_path = "data/200_rm_datasets/rm_200_4_1.0_4.0.txt"
     inst = InstanceRM(data_path)
 
     # Print basic instance info
@@ -721,27 +752,10 @@ if __name__ == "__main__":
     print(f"  Optimal expected value (full cap, t=0): {vartheta[inst.C[leg], 0]:.4f}")
     print("  y_star (first 3 itineraries, full cap, first 3 time periods):")
     print(y_star[:3, inst.C[leg], :3])
-    assert vartheta.shape == (inst.C[leg]+1, inst.T+1)
-    assert y_star.shape == (inst.J, inst.C[leg]+1, inst.T)
+    assert vartheta.shape == (inst.C[leg] + 1, inst.T + 1)
+    assert y_star.shape == (inst.J, inst.C[leg] + 1, inst.T)
     assert np.all((y_star == 0) | (y_star == 1))
     print("Single-leg DP test passed.")
-
-    # # Check dimensions of probability array
-    # print(f"\nChecking probability array dimensions:")
-    # print(f"  probabilities shape: {inst.probabilities.shape}")
-    # print(f"  Expected shape: ({inst.T}, {inst.J})")
-    # print(f"  Shape matches expected: {inst.probabilities.shape == (inst.T, inst.J)}")
-    # print(f"  Sum of probabilities per time period (first 3):")
-    # for t in range(min(3, inst.T)):
-    #     prob_sum = np.sum(inst.probabilities[t, :])
-    #     print(f"    t={t}: {prob_sum:.6f}")
-    # # Print row sums (total probability per time period)
-    # print(f"\nRow sums (total probability per time period):")
-    # for t in range(inst.T):
-    #     row_sum = np.sum(inst.probabilities[t, :])
-    #     print(f"    t={t}: {row_sum:.6f}")
-    # # Save probabilities to debug file
-    # np.savetxt(f"debug/probabilities.txt", inst.probabilities, fmt="%.6f")
 
     # Save results
     np.savetxt(f"debug/lambda_t0.txt", inst.lmd[:, :, 0], fmt="%.6f")
@@ -760,7 +774,7 @@ if __name__ == "__main__":
     print(f"  mu[0, C_leg]: {mu[0, inst.C[leg]]:.4f}")
     if inst.T > 1 and inst.C[leg] > 0:
         print(f"  mu[1, C_leg]: {mu[1, inst.C[leg]]:.4f}")
-        print(f"  mu[1, C_leg-1]: {mu[1, inst.C[leg]-1]:.4f}")
+        print(f"  mu[1, C_leg-1]: {mu[1, inst.C[leg] - 1]:.4f}")
 
     np.savetxt(f"debug/mu_leg{leg}.txt", mu, fmt="%.6f")
 
@@ -779,7 +793,7 @@ if __name__ == "__main__":
     assert V_lambda_subgrad.shape == (inst.L, inst.J, inst.T)
     print("  V_lambda_subgradient sample (leg 0, first 3 itineraries, first 3 time periods):")
     print(V_lambda_subgrad[0, :3, :3])
-    np.savetxt(f"debug/V_lambda_subgradient_leg{leg}.txt", V_lambda_subgrad[leg,:,:], fmt="%.6f")
+    np.savetxt(f"debug/V_lambda_subgradient_leg{leg}.txt", V_lambda_subgrad[leg, :, :], fmt="%.6f")
     print("compute_V_lambda_subgradient test passed.")
 
     # Test minimize_lr_relaxation

@@ -1,35 +1,39 @@
-1. fix tau=600 case
-1b. make sure code runs correct when exceeds max iter
-2. clean up documentation
-3. rearrange code
-6. add testing code for all. generate table
-4. update readme
-5. push to github
+# Lagrangian Relaxation Algorithm for Network Revenue Management
 
+This repository provides a public implementation of the Lagrangian Relaxation Algorithm for network revenue management, originally developed by Prof. Huseyin Topaloglu (2009).
 
+Researchers in operations research often use this algorithm and its test dataset as benchmarks, but no open implementation was available until now. This code lets researchers test, compare, and build on the algorithm easily. I have tested this implementation on all instances in Prof. Topaloglu's dataset, and the results match those in his paper.
 
-# Implementation of the Lagrangian Relaxation Algorithm for Network Revenue Management
+I developed this project as part of my research with Prof. Baris Ata on solving NRM problems using deep learning-based numerical methods. I hope this implementation supports reproducible research and further work in network revenue management.
 
-<br>
+For more details, see the [documentation](documentation/documentation.pdf).
 
-This repository provides a public implementation of the Lagrangian Relaxation Algorithm for network revenue management, originally developed by Prof. Huseyin Topaloglu (2009). 
-Researchers in operations research often use this algorithm and its test dataset as benchmarks, but no open implementation has been available until now. 
-This code allows researchers to test, compare, and build upon the algorithm easily. 
-I have tested our implementation on all instances in Prof. Topaloglu's dataset, and the results match those reported in his paper. 
+## Installation
 
-I developed this project as part of my research with Prof. Baris Ata on solving NRM problems with deep learning-based numerical methods. 
-I hope this implementation will help others support reproducible research and further work in network revenue management.
+```bash
+# Clone the repository
+git clone https://github.com/steve-shao/LagrangianRelaxationNRM.git
+cd LagrangianRelaxationNRM
 
-For detailed information, see the [documentation](docs/documentation.pdf).
+# Install dependencies
+pip install -r requirements.txt
+```
 
-<br>
+## Usage
 
+```bash
+# Run all instances in the dataset
+python run_all_instances.py
+```
 
+## License
+
+This project is licensed under the MIT License.
 
 ## Resources
 
 This project is based on [Topaloglu (2009)](https://people.orie.cornell.edu/huseyin/publications/revenue_man.pdf).
-Both the paper and its dataset are publicly available on [Prof. Huseyin Topaloglu's website](https://people.orie.cornell.edu/huseyin).
+The paper and its dataset are available on [Prof. Huseyin Topaloglu's website](https://people.orie.cornell.edu/huseyin).
 You can access the paper directly [here](https://people.orie.cornell.edu/huseyin/publications/revenue_man.pdf).
 The dataset can be downloaded from [this page](https://people.orie.cornell.edu/huseyin/research/rm_datasets/rm_datasets.html).
 

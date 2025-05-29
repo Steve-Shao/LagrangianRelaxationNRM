@@ -90,22 +90,6 @@
 % \vspace{0.5cm}
 
 
-
-% ------------------------------------------------------------------------------------------------
-% LITERATURE REVIEW
-% ------------------------------------------------------------------------------------------------
-
-\section{Resources}
-
-This project is based on \cite{topaloglu2009using}.
-Both the paper and its dataset are publicly available on Prof. Huseyin Topaloglu's \underline{\href{https://people.orie.cornell.edu/huseyin}{website}}. 
-You can access the paper directly \underline{\href{https://people.orie.cornell.edu/huseyin/publications/revenue_man.pdf}{here}}.
-The dataset can be downloaded from \underline{\href{https://people.orie.cornell.edu/huseyin/research/rm_datasets/rm_datasets.html}{this page}}.
-
-\vspace{0.5cm}
-
-
-
 % ------------------------------------------------------------------------------------------------
 % SECTION
 % ------------------------------------------------------------------------------------------------
@@ -157,6 +141,8 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 \vspace{0.5cm}
 
 
+
+\newpage
 
 % ------------------------------------------------------------------------------------------------
 % SECTION
@@ -245,6 +231,10 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 
 \vspace{0.5cm}
 
+
+
+\newpage
+
 \noindent
 \textbf{Lagrangian Relaxation Algorithm}:
 \begin{itemize}
@@ -304,11 +294,11 @@ and let $\mathcal{C}^{|\mathcal{L}|}$ be the state space.
 
 
 
+\newpage
+
 % ------------------------------------------------------------------------------------------------
 % SECTION
 % ------------------------------------------------------------------------------------------------
-
-{\color{blue}
 
 \section{The subgradient of $V_1^\lambda(\mathbf{c}_1)$}
 
@@ -370,9 +360,9 @@ Using \eqref{eq:lagrangian_relaxation_algorithm}, we have:
     - p_{jt} \,\mathbf{1}\left\{f_j - \sum_{k \in \mathcal{L}} \lambda_{kjt} \ge 0\right\} 
 \end{align*}
 
-}%
 
 
+\newpage
 
 % ------------------------------------------------------------------------------------------------
 % SECTION
@@ -424,6 +414,8 @@ We solve the single-resource optimality equation using tabular backward inductio
 
 
 
+\newpage
+
 % ------------------------------------------------------------------------------------------------
 \subsection{Subroutine: Computing State Probabilities}
 
@@ -465,6 +457,8 @@ These probabilities indicate the likelihood of resource $i$ having $x$ units of 
 
 
 
+\newpage
+
 % ------------------------------------------------------------------------------------------------
 \subsection{Subroutine: Computing $\vartheta$-Subgradient}
 
@@ -497,8 +491,10 @@ This subroutine uses the state probabilities and the optimal policies to calcula
 \end{algorithm}
 
 
-% ------------------------------------------------------------------------------------------------
 
+\newpage
+
+% ------------------------------------------------------------------------------------------------
 \subsection{Final Subgradient Optimization}
 
 \noindent
@@ -529,18 +525,22 @@ Thus, here we use a projected subgradient descent algorithm to optimize $\lambda
 \vspace{0.5cm}
 
 
+% \noindent
+% Once the optimal Lagrangian multipliers $\lambda^*$ are obtained (e.g., using Algorithm 4), the control policy based on bid prices can be defined. To evaluate the performance of this policy, we can estimate the total expected revenue by simulating customer arrivals and decisions over the time horizon. The following algorithm describes this Monte Carlo simulation process.
 
+% \vspace{0.5cm}
+
+% \noindent
+% \textbf{Note:} Due to the curse of dimensionality, the exact dynamic programming approach is computationally feasible only for small networks. For larger instances, Monte Carlo simulation can approximate the expected revenue by sampling customer arrivals and applying the bid price policy iteratively.
+
+
+\newpage
 
 % ------------------------------------------------------------------------------------------------
 \subsection{Algorithm: Computing Total Expected Revenue using Bid Prices}
 
 \noindent
-Once the optimal Lagrangian multipliers $\lambda^*$ are obtained (e.g., using Algorithm 4), the control policy based on bid prices can be defined. To evaluate the performance of this policy, we can estimate the total expected revenue by simulating customer arrivals and decisions over the time horizon. The following algorithm describes this Monte Carlo simulation process.
-
-\vspace{0.5cm}
-
-\noindent
-\textbf{Note:} Due to the curse of dimensionality, the exact dynamic programming approach is computationally feasible only for small networks. For larger instances, Monte Carlo simulation can approximate the expected revenue by sampling customer arrivals and applying the bid price policy iteratively.
+After obtaining optimal Lagrangian multipliers $\lambda^*$ (e.g., via Algorithm 4), we define a bid price control policy. To evaluate this policy, we estimate total expected revenue through Monte Carlo simulation of customer arrivals and decisions. The algorithm below details this process.
 
 \vspace{0.5cm}
 
@@ -548,66 +548,139 @@ Once the optimal Lagrangian multipliers $\lambda^*$ are obtained (e.g., using Al
 \caption{Estimate Total Expected Revenue using Bid Price Policy (Monte Carlo Simulation)}
 \label{alg:monte_carlo_revenue}
 \begin{algorithmic}[1]
-\Input
-    \State Optimized Lagrangian multipliers $\lambda^*$ (from Algorithm 4)
-    \State Initial capacities $c = (c_1, \ldots, c_{|\mathcal{L}|})$ for resources $i \in \mathcal{L}$
-    \State Set of products $\mathcal{J}$ (assumed to include a dummy product $\psi$ with $f_\psi=0, a_{i\psi}=0$)
-    \State Product revenues $f_j$ for $j \in \mathcal{J}$
-    \State Resource consumption $a_{ij}$ for $i \in \mathcal{L}, j \in \mathcal{J}$
-    \State Arrival probabilities $p_{jt}$ for $j \in \mathcal{J}, t \in \mathcal{T}$ (with $\sum_{j \in \mathcal{J}} p_{jt} = 1$ for each $t$)
-    \State Time horizon $\mathcal{T} = \{1, \ldots, \tau\}$
-    \State Maximum capacity $C$ for any resource (needed for $\vartheta$ table dimensions)
-    \State Number of simulation runs $N_{sim}$
-\Output
-    \State Estimated total expected revenue $E[R]$
+\Require Precomputed value functions $\vartheta^{\lambda^*}_{i,t'}(x)$, initial capacities $c$, product set $\mathcal{J}$ (incl. dummy $\psi$), revenues $f_j$, resource consumptions $a_{ij}$, arrival probabilities $p_{jt}$, time horizon $\mathcal{T} = \{1, \ldots, \tau\}$, number of simulations $N_{sim}$
+\Ensure Estimated total expected revenue $E[R]$
 
-\Statex
-\State \textbf{Phase 1: Pre-computation}
-\State Compute value functions $\vartheta^{\lambda^*}_{i,t'}(x)$ for all $i \in \mathcal{L}$, $t' \in \{1, \ldots, \tau+1\}$, and $x \in \{0, \ldots, C\}$ using Algorithm~\ref{alg:solve_sdp} with the input $\lambda^*$.
-\Statex \Comment{Recall that $\vartheta^{\lambda^*}_{i,\tau+1}(x) = 0$ for all $x$ is the terminal condition for Algorithm~\ref{alg:solve_sdp}.}
+\State Initialize $total\_rev \gets 0.0$
 
-\Statex
-\State \textbf{Phase 2: Monte Carlo Simulation}
-\State Initialize $TotalSimulatedRevenue \gets 0.0$
-
-\For{$s = 1$ \textbf{to} $N_{sim}$} \Comment{Iterate over simulation runs}
-    \State $CurrentRunRevenue \gets 0.0$
-    \State $current\_capacities \gets \text{copy of } c$ \Comment{Initialize resource capacities for this run, array indexed by $i$}
-    \For{$t = 1$ \textbf{to} $\tau$} \Comment{Iterate over time periods}
-        \State Sample a product $j_{req} \in \mathcal{J}$ based on the probability distribution $\{p_{jt}\}_{j \in \mathcal{J}}$ for period $t$.
+\For{$s = 1$ \textbf{to} $N_{sim}$} \Comment{For each simulation run $s$}
+    \State $run\_rev \gets 0.0$
+    \State $cap \gets \text{copy of } c$ \Comment{Reset capacities for this run}
+    \For{$t = 1$ \textbf{to} $\tau$} \Comment{For each time period $t$}
+        \State Sample product $j$ using probabilities $\{p_{jt}\}_{j \in \mathcal{J}}$ for time $t$.
         
-        \If{$f_{j_{req}} > 0$} \Comment{Process actual products; dummy product $\psi$ has $f_\psi=0$}
-            \State $OpportunityCost \gets 0.0$
-            \State $SufficientCapacity \gets \text{true}$
+        \If{$f_{j} > 0$} \Comment{Process non-dummy products (dummy $\psi$ has $f_\psi=0$)}
+            \State $opp\_cost \gets 0.0$
+            \State $enough\_cap \gets \text{true}$
             
-            \Comment{Check capacity and calculate total opportunity cost for product $j_{req}$}
-            \For{$i \in \mathcal{L}$ such that $a_{ij_{req}} > 0$} \Comment{For each resource $i$ consumed by $j_{req}$}
-                \If{$current\_capacities[i] < a_{ij_{req}}$}
-                    \State $SufficientCapacity \gets \text{false}$
-                    \State \textbf{break} \Comment{Out of loop checking resources for $j_{req}$; insufficient capacity for resource $i$}
+            \Comment{Assess $j$: check capacity and calculate opportunity cost}
+            \For{$i \in \mathcal{L}$ such that $a_{ij} > 0$} \Comment{For each resource $i$ consumed by $j$}
+                \If{$cap[i] < a_{ij}$}
+                    \State $enough\_cap \gets \text{false}$
+                    \State \textbf{break} \Comment{Insufficient capacity for $j$ on resource $i$}
                 \EndIf
-                \For{$r = 1$ \textbf{to} $a_{ij_{req}}$} \Comment{Sum bid prices for each unit of resource $i$ consumed}
-                    \State $\text{bid\_price\_unit} \gets \vartheta^{\lambda^*}_{i,t+1}(current\_capacities[i] - r + 1) - \vartheta^{\lambda^*}_{i,t+1}(current\_capacities[i] - r)$
-                    \State $OpportunityCost \gets OpportunityCost + \text{bid\_price\_unit}$
+                \For{$r = 1$ \textbf{to} $a_{ij}$} \Comment{Sum bid prices for each unit of $i$ consumed}
+                    \State $bp \gets \vartheta^{\lambda^*}_{i,t+1}(cap[i] - r + 1) - \vartheta^{\lambda^*}_{i,t+1}(cap[i] - r)$
+                    \State $opp\_cost \gets opp\_cost + bp$
                 \EndFor
             \EndFor
             
-            \If{$SufficientCapacity \text{ and } f_{j_{req}} \ge OpportunityCost$} \Comment{Acceptance decision}
-                \State $CurrentRunRevenue \gets CurrentRunRevenue + f_{j_{req}}$
-                \For{$i \in \mathcal{L}$ such that $a_{ij_{req}} > 0$} \Comment{Update capacities}
-                    \State $current\_capacities[i] \gets current\_capacities[i] - a_{ij_{req}}$
+            \If{$enough\_cap \text{ and } f_{j} \ge opp\_cost$} \Comment{Accept $j$}
+                \State $run\_rev \gets run\_rev + f_{j}$
+                \For{$i \in \mathcal{L}$ such that $a_{ij} > 0$} \Comment{Update consumed capacities}
+                    \State $cap[i] \gets cap[i] - a_{ij}$
                 \EndFor
             \EndIf
         \EndIf
-        \Comment{Capacities in $current\_capacities$ are now updated for the start of the next period $t+1$}
-    \EndFor \Comment{End of time horizon for one simulation run}
-    \State $TotalSimulatedRevenue \gets TotalSimulatedRevenue + CurrentRunRevenue$
-\EndFor \Comment{End of all simulation runs}
+        \Comment{Capacities $cap$ are now updated for period $t+1$}
+    \EndFor \Comment{End of time horizon $\mathcal{T}$ for run $s$}
+    \State $total\_rev \gets total\_rev + run\_rev$
+\EndFor \Comment{End of $N_{sim}$ simulation runs}
 
-\State $E[R] \gets TotalSimulatedRevenue / N_{sim}$
+\State $E[R] \gets total\_rev / N_{sim}$
 \State \Return $E[R]$
 \end{algorithmic}
 \end{algorithm}
+
+
+% ------------------------------------------------------------------------------------------------
+% 
+% ------------------------------------------------------------------------------------------------
+
+\newpage
+
+\section{Numerical Results}
+
+The exact results depend on the tuning of algorithm parameters, such as step length and other settings. 
+Below is a comparison of our final results with those reported in \cite{topaloglu2009using}.
+
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{l|l|l|l|l|l}
+\hline
+\textbf{Problem} & \textbf{Upper Bound} & \textbf{Upper Bound} & \textbf{Mean Revenue} & \textbf{Mean Revenue} & \textbf{Std (Our Impl} \\
+ & \textbf{(Huseyin)} & \textbf{(Our Impl.)} & \textbf{(Huseyin)} & \textbf{(Our Impl.)} & \textbf{1000 Samples)} \\
+\hline
+rm\_200\_4\_1.0\_4.0 & 20,439 & \textcolor{green}{20,436} & 20,018 & \textcolor{green}{20,049} & 31.31 \\
+rm\_200\_4\_1.0\_8.0 & 33,305 & \textcolor{green}{33,261} & 32,226 & \textcolor{green}{32,821} & 62.70 \\
+rm\_200\_4\_1.2\_4.0 & 18,938 & \textcolor{green}{18,885} & 18,374 & \textcolor{green}{18,510} & 28.49 \\
+rm\_200\_4\_1.2\_8.0 & 31,737 & \textcolor{green}{31,651} & 30,852 & \textcolor{green}{31,271} & 64.73 \\
+rm\_200\_4\_1.6\_4.0 & 16,600 & \textcolor{green}{16,541} & 15,981 & \textcolor{green}{16,186} & 27.72 \\
+rm\_200\_4\_1.6\_8.0 & 29,413 & \textcolor{green}{29,247} & 28,381 & \textcolor{green}{28,978} & 63.80 \\
+rm\_200\_5\_1.0\_4.0 & 21,298 & \textcolor{green}{21,296} & 21,181 & \textcolor{red}{20,973} & 34.79 \\
+rm\_200\_5\_1.0\_8.0 & 34,393 & \textcolor{green}{34,377} & 34,271 & \textcolor{red}{34,068} & 69.42 \\
+rm\_200\_5\_1.2\_4.0 & 20,184 & \textcolor{green}{20,112} & 19,818 & \textcolor{red}{19,677} & 33.06 \\
+rm\_200\_5\_1.2\_8.0 & 33,165 & \textcolor{green}{33,051} & 32,766 & \textcolor{red}{32,620} & 68.80 \\
+rm\_200\_5\_1.6\_4.0 & 17,704 & \textcolor{green}{17,654} & 17,318 & \textcolor{red}{17,218} & 30.93 \\
+rm\_200\_5\_1.6\_8.0 & 30,594 & \textcolor{green}{30,492} & 30,107 & \textcolor{red}{29,980} & 66.84 \\
+rm\_200\_6\_1.0\_4.0 & 21,128 & \textcolor{green}{21,113} & 20,709 & \textcolor{green}{20,729} & 33.13 \\
+rm\_200\_6\_1.0\_8.0 & 34,178 & \textcolor{green}{34,102} & 33,466 & \textcolor{green}{33,664} & 66.86 \\
+rm\_200\_6\_1.2\_4.0 & 19,649 & \textcolor{green}{19,636} & 19,156 & \textcolor{green}{19,165} & 31.25 \\
+rm\_200\_6\_1.2\_8.0 & 32,566 & \textcolor{green}{32,520} & 31,808 & \textcolor{green}{31,993} & 67.36 \\
+rm\_200\_6\_1.6\_4.0 & 17,304 & \textcolor{green}{17,256} & 16,269 & \textcolor{green}{16,837} & 30.08 \\
+rm\_200\_6\_1.6\_8.0 & 30,170 & \textcolor{green}{30,061} & 29,320 & \textcolor{green}{29,599} & 65.70 \\
+rm\_200\_8\_1.0\_4.0 & 18,975 & \textcolor{green}{18,778} & 18,217 & \textcolor{green}{18,268} & 31.10 \\
+rm\_200\_8\_1.0\_8.0 & 30,490 & \textcolor{green}{30,275} & 29,453 & \textcolor{green}{29,716} & 66.44 \\
+rm\_200\_8\_1.2\_4.0 & 17,472 & \textcolor{red}{17,501} & 16,941 & \textcolor{red}{16,915} & 29.44 \\
+rm\_200\_8\_1.2\_8.0 & 28,908 & \textcolor{green}{28,889} & 28,130 & \textcolor{green}{28,236} & 61.56 \\
+rm\_200\_8\_1.6\_4.0 & 15,295 & \textcolor{red}{15,297} & 14,720 & \textcolor{green}{14,764} & 27.34 \\
+rm\_200\_8\_1.6\_8.0 & 26,661 & \textcolor{green}{26,555} & 25,701 & \textcolor{green}{25,988} & 63.75 \\
+rm\_600\_4\_1.0\_4.0 & 30,995 & \textcolor{green}{30,994} & 30,640 & \textcolor{red}{30,575} & 49.25 \\
+rm\_600\_4\_1.0\_8.0 & 50,444 & \textcolor{green}{50,406} & 49,862 & \textcolor{green}{49,872} & 107.31 \\
+rm\_600\_4\_1.2\_4.0 & 28,668 & \textcolor{green}{28,615} & 28,145 & \textcolor{green}{28,167} & 44.65 \\
+rm\_600\_4\_1.2\_8.0 & 48,054 & \textcolor{green}{47,947} & 47,162 & \textcolor{green}{47,541} & 101.67 \\
+rm\_600\_4\_1.6\_4.0 & 25,148 & \textcolor{green}{25,084} & 24,540 & \textcolor{green}{24,596} & 43.50 \\
+rm\_600\_4\_1.6\_8.0 & 44,555 & \textcolor{green}{44,357} & 43,547 & \textcolor{green}{44,003} & 102.95 \\
+rm\_600\_5\_1.0\_4.0 & 32,254 & \textcolor{red}{32,272} & 32,112 & \textcolor{red}{31,775} & 56.33 \\
+rm\_600\_5\_1.0\_8.0 & 52,071 & \textcolor{green}{52,056} & 51,275 & \textcolor{green}{51,668} & 118.57 \\
+rm\_600\_5\_1.2\_4.0 & 30,004 & \textcolor{red}{30,552} & 30,308 & \textcolor{red}{30,100} & 51.57 \\
+rm\_600\_5\_1.2\_8.0 & 50,282 & \textcolor{green}{50,162} & 49,899 & \textcolor{red}{49,629} & 114.59 \\
+rm\_600\_5\_1.6\_4.0 & 26,936 & \textcolor{green}{26,880} & 26,605 & \textcolor{red}{26,441} & 44.95 \\
+rm\_600\_5\_1.6\_8.0 & 46,497 & \textcolor{green}{46,355} & 46,070 & \textcolor{red}{45,858} & 107.20 \\
+rm\_600\_6\_1.0\_4.0 & 25,541 & \textcolor{red}{25,559} & 25,310 & \textcolor{red}{25,044} & 47.32 \\
+rm\_600\_6\_1.0\_8.0 & 41,412 & \textcolor{green}{41,262} & 40,849 & \textcolor{red}{40,753} & 102.27 \\
+rm\_600\_6\_1.2\_4.0 & 23,687 & \textcolor{red}{23,708} & 23,306 & \textcolor{red}{23,191} & 42.77 \\
+rm\_600\_6\_1.2\_8.0 & 39,307 & \textcolor{green}{39,270} & 38,704 & \textcolor{green}{38,799} & 100.42 \\
+rm\_600\_6\_1.6\_4.0 & 20,817 & \textcolor{green}{20,788} & 20,273 & \textcolor{red}{20,229} & 41.46 \\
+rm\_600\_6\_1.6\_8.0 & 36,381 & \textcolor{green}{36,261} & 35,631 & \textcolor{green}{35,867} & 101.19 \\
+rm\_600\_8\_1.0\_4.0 & 22,960 & \textcolor{green}{22,798} & 22,269 & \textcolor{red}{22,206} & 44.93 \\
+rm\_600\_8\_1.0\_8.0 & 36,933 & \textcolor{green}{36,718} & 36,046 & \textcolor{green}{36,071} & 95.73 \\
+rm\_600\_8\_1.2\_4.0 & 21,102 & \textcolor{red}{21,172} & 20,633 & \textcolor{red}{20,431} & 39.54 \\
+rm\_600\_8\_1.2\_8.0 & 34,831 & \textcolor{red}{34,939} & 34,277 & \textcolor{red}{34,168} & 88.63 \\
+rm\_600\_8\_1.6\_4.0 & 18,500 & \textcolor{red}{18,553} & 17,830 & \textcolor{green}{17,888} & 35.95 \\
+rm\_600\_8\_1.6\_8.0 & 32,247 & \textcolor{green}{32,180} & 31,317 & \textcolor{green}{31,411} & 90.19 \\
+\hline
+\end{tabular}
+\caption{Comparison of bounds and revenues. Green: our value is better; Red: our value is worse.}
+\end{table}
+
+
+% ------------------------------------------------------------------------------------------------
+% LITERATURE REVIEW
+% ------------------------------------------------------------------------------------------------
+
+\newpage
+
+\section{Resources}
+
+This project is based on \cite{topaloglu2009using}.
+Both the paper and its dataset are publicly available on Prof. Huseyin Topaloglu's \underline{\href{https://people.orie.cornell.edu/huseyin}{website}}. 
+You can access the paper directly \underline{\href{https://people.orie.cornell.edu/huseyin/publications/revenue_man.pdf}{here}}.
+The dataset can be downloaded from \underline{\href{https://people.orie.cornell.edu/huseyin/research/rm_datasets/rm_datasets.html}{this page}}.
+
+\vspace{0.5cm}
 
 
 

@@ -98,7 +98,7 @@ def run_instance(data_path):
     print(f"Optimized lambda (first and last time period) saved to {lambda_txt_path}")
 
 if __name__ == "__main__":
-    # data_dir = "data/200_rm_datasets"
+    # data_dir = "data/600_rm_datasets"
     # instance_files = [
     #     os.path.join(data_dir, fname)
     #     for fname in os.listdir(data_dir)
@@ -145,6 +145,7 @@ if __name__ == "__main__":
             if os.path.isdir(instance_results_dir):
                 instance_name = item_name 
                 our_results_json_path = os.path.join(instance_results_dir, "results.json")
+                if os.path.exists(our_results_json_path):
                     try:
                         with open(our_results_json_path, "r") as f:
                             our_data = json.load(f)

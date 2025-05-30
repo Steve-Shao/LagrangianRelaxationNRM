@@ -6,6 +6,8 @@ Researchers in operations research often use this algorithm and its test dataset
 
 I developed this project as part of my research with Prof. Baris Ata on solving NRM problems using deep learning-based numerical methods. I hope this implementation supports reproducible research and further work in network revenue management.
 
+**Note:** This implementation has not been reviewed or endorsed by the original paper's author, Prof. Huseyin Topaloglu. All implementation details are provided in the accompanying documentation. If you find any issues or have suggestions, please submit an issue on GitHub, and I will address them.
+
 For more details, see the [documentation](documentation/documentation.pdf).
 
 ## Resources
